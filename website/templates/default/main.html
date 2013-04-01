@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>{% block title %}Tesserae NG{% endblock %}</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width">
+
+    <link rel="stylesheet" href="/media/css/bootstrap.min.css">
+    <style>
+      {% block default_inlinecss %}
+      body {
+        padding-top: 60px;
+        padding-bottom: 40px;
+      }
+      {% endblock %}
+      {% block inlinecss %}{% endblock %}
+    </style>
+    <link rel="stylesheet" href="/media/css/bootstrap-responsive.min.css">
+    <link rel="stylesheet" href="/media/css/main.css">
+
+    <script src="/media/js/vendor/modernizr-2.6.2-respond-1.1.0.min.js"></script>
+    <script src="/media/js/vendor/knockout-2.2.1.js"></script>
+  </head>
+  <body>
+    <!--[if lt IE 7]>
+        <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+        <![endif]-->
+
+    <div class="navbar navbar-inverse navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          <span class="brand">Tesserae NG</span>
+          <div class="nav-collapse collapse">
+            <ul class="nav">
+              <li class="{% block nav_home_class %}{% endblock %}">
+                <a href="{% block home_link %}/home{% endblock %}">Home</a>
+              </li>
+              <li class="{% block nav_dropdown_class %}dropdown{% endblock %}">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Search <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                  <li class="nav-header">Latin</li>
+                  <li class="{% block nav_lbs_class %}{% endblock %}">
+                    <a href="{% block lbs_link %}/search/latin/basic{% endblock %}">Basic Search</a>
+                  </li>
+                  <li class="{% block nav_las_class %}{% endblock %}">
+                    <a href="{% block las_link %}/search/latin/advanced{% endblock %}">Advanced Search</a>
+                  </li>
+                  <li class="divider"></li>
+                  <li class="nav-header">Greek</li>
+                  <li class="{% block nav_gas_class %}{% endblock %}">
+                    <a href="{% block gas_link %}/search/greek/advanced{% endblock %}">Advanced Search</a>
+                  </li>
+                  <li class="divider"></li>
+                  <li class="nav-header">English</li>
+                  <li class="{% block nav_eas_class %}{% endblock %}">
+                    <a href="{% block eas_link %}/search/english/advanced{% endblock %}">Advanced Search</a>
+                  </li>
+                </ul>
+              </li>
+              <li><a href="#about" data-toggle="modal">About</a></li>
+              <li><a href="#contact" data-toggle="modal">Contact</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      {% block container %}{% endblock %}
+      <hr>
+    </div>
+
+    <div id="about" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="aboutLabel" aria-hidden="true">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="about" aria-hidden="true">&times;</button>
+        <h3 id="aboutLabel">About Tesserae NG</h3>
+      </div>
+      <div class="modal-body">
+        <p> 
+          Tesserae is a collaborative project of the <a href="http://www.buffalo.edu">University at Buffalo</a>'s <a href="http://www.classics.buffalo.edu"><strong>Department of Classics</strong></a> and <a href="http://linguistics.buffalo.edu"><strong>Department of Linguistics</strong></a>, and the <a href="http://vast.uccs.edu">VAST Lab</a> of the <a href="http://www.uccs.edu/">University of Colorado at Colorado Springs</a>.
+        </p>
+        <p>
+          This project is funded by the <a href="http://www.neh.gov/ODH/ODHUpdate/tabid/108/EntryId/177/Announcing-22-New-Start-Up-Grant-Awards-March-2012.aspx"><strong>Office of Digital Humanities</strong> of the <strong>National Endowment for the Humanities</strong></a> and by the <a href="http://digitalhumanities.buffalo.edu/"><strong>Digital Humanities Initiative at Buffalo</strong></a>.<br />
+        </p>
+        <p style="text-align: center">
+          <img src="/media/img/neh_logo-light_bg_small.png" />
+          <img src="/media/img/ublogo_small.png" />
+          <br />
+          <img src="/media/img/uccs3_small.png" />
+          <img src="/media/img/DHIBlogo_small.png" />
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-dismiss="modal" aria-hidden="true">Close</button>
+      </div>
+    </div>
+
+    <div id="contact" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="contactLabel" aria-hidden="true">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="contact" aria-hidden="true">&times;</button>
+        <h3 id="contactLabel">Contact Us</h3>
+      </div>
+      <div class="modal-body">
+        <p>
+          Inquiries or comments about this website should be directed to
+          <div>
+            <a href="mailto:tesserae-ng@chriseberle.net">
+              <img src="http://www.gravatar.com/avatar/06bfefade06c623ed3dad77facc1e83b?s=50" />
+              <strong>Chris Eberle</strong>
+            </a>
+          </div>
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-dismiss="modal" aria-hidden="true">Close</button>
+      </div>
+    </div>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/media/js/vendor/jquery-1.9.1.min.js"><\/script>')</script>
+
+    <script src="/media/js/vendor/bootstrap.min.js"></script>
+    <script src="/media/js/main.js"></script>
+  </body>
+</html>

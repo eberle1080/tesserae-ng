@@ -1,0 +1,35 @@
+{% extends "main.html" %}
+{% block title %}Tesserae NG - Home{% endblock %}
+{% block nav_home_class %}active{% endblock %}
+{% block home_link %}#{% endblock %}
+{% block container %}
+  <div class="hero-unit">
+    <h1>Welcome!</h1>
+    <dl>
+      <dt>Tessera (Latin)</dt>
+      <dd>
+        <ol>
+          <li>a small square or block</li>
+          <li>a tablet bearing a password</li>
+          <li>a token divided between friends, so they or their descendants can recognize one another when meeting again.</li>
+        </ol>
+      </dd>
+    </dl>
+    <p><a href="search/latin/basic" class="btn btn-primary btn-large">Try it out &raquo;</a></p>
+  </div>
+
+  <div class="row">
+    <div class="span4">
+      <h2>What is it?</h2>
+      <p>Tesserae is a freely available tool for detecting allusions in Latin poetry. It was created by the Textual Analysis Working Group, a collaborative, interdisciplinary research team based at the University at Buffalo.</p>
+    </div>
+    <div class="span4">
+      <h2>Why use it?</h2>
+      <p>The Tesserae project has the potential to open up new ways of experiencing the relationships between texts, and the project authors believe that this in turn will lead to truly fresh perspectives and interpretations.</p>
+    </div>
+    <div class="span4">
+      <h2>How does it work?</h2>
+      <p>We are currently researching new techniques to measure texts' similarity according to semantics, context, sound, and meter. We are also in the process of expanding our corpus to include Greek as well as Latin texts.</p>
+    </div>
+  </div>
+{% endblock %}
