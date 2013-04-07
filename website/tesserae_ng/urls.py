@@ -10,5 +10,6 @@ urlpatterns = patterns('website.tesserae_ng.views',
     url(r'^logout$', 'logout', name='logout'),
     url(r'^login$', 'login', name='login'),
     url(r'^upload$', 'upload', name='upload'),
+    url(r'^ingest$', 'ingest', name='ingest'),
     url(r'^s/', include('haystack.urls'))
 )

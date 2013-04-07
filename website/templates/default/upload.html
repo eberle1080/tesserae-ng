@@ -7,7 +7,7 @@
 
   <div class="hero-unit">
     <h2>Upload a new source text</h2>
-    <form class="form-horizontal" action="/ingest" method="post">
+    <form class="form-horizontal" action="/ingest" method="post" enctype="multipart/form-data">
       {% csrf_token %}
 {% for hidden in form.hidden_fields %}
       {{ hidden }}

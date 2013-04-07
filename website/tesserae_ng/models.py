@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib import admin
+from dirtyfields import DirtyFieldsMixin
 import reversion
 
-# A top level text
-class SourceText(models.Model):
+class SourceText(models.Model, DirtyFieldsMixin):
     LANGUAGE_CHOICES = (
         ('latin', 'Latin'),
         ('greek', 'Greek'),
@@ -17,7 +17,6 @@ class SourceText(models.Model):
     online_source_link = models.URLField(max_length=4096, null=True, blank=True)
     print_source_name = models.CharField(max_length=4096, null=True, blank=True)
     print_source_link = models.URLField(max_length=4096, null=True, blank=True)
-    text = models.TextField(db_index=False)
     enabled = models.BooleanField(default=True)
 
 class SourceTextAdmin(reversion.VersionAdmin):
@@ -28,24 +27,41 @@ class SourceTextAdmin(reversion.VersionAdmin):
                 ('online_source_name', 'online_source_link'),
                 ('print_source_name', 'print_source_link'))
         }),
+    )
+
+admin.site.register(SourceText, SourceTextAdmin)
+
+class SourceTextVolume(models.Model, DirtyFieldsMixin):
+    source = models.ForeignKey(SourceText, on_delete=models.PROTECT)
+    volume = models.CharField(max_length=255)
+    text = models.TextField(db_index=False)
+
+class SourceTextVolumeAdmin(reversion.VersionAdmin):
+    list_display = ('source', 'volume')
+    fieldsets = (
+        (None, {
+            'fields': ('source', 'volume')
+        }),
         ('Full text', {
             'classes': ('collapse',),
             'fields': ('text',)
         })
     )
 
-admin.site.register(SourceText, SourceTextAdmin)
+admin.site.register(SourceTextVolume, SourceTextVolumeAdmin)
 
-class SourceTextLine(models.Model):
-    source = models.ForeignKey(SourceText, on_delete=models.PROTECT)
-    line = models.TextField(db_index=False)
+class SourceTextSentence(models.Model, DirtyFieldsMixin):
+    volume = models.ForeignKey(SourceTextVolume, on_delete=models.PROTECT)
+    sentence = models.TextField(db_index=False)
+    start_line_num = models.IntegerField()
+    end_line_num = models.IntegerField()
 
-class SourceTextLineAdmin(reversion.VersionAdmin):
-    list_display = ('source', 'line',)
+class SourceTextSentenceAdmin(reversion.VersionAdmin):
+    list_display = ('volume', 'sentence',)
     fieldsets = (
         (None, {
-            'fields': ('source', 'line',)
+            'fields': ('volume', 'sentence', 'start_line_num', 'end_line_num')
         }),
     )
 
-admin.site.register(SourceTextLine, SourceTextLineAdmin)
+admin.site.register(SourceTextSentence, SourceTextSentenceAdmin)

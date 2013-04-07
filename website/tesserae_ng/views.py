@@ -92,10 +92,13 @@ def upload(request):
 @require_POST
 def ingest(request):
     if request.user.is_authenticated():
-        form = LinkSubmitForm(request.POST)
+        form = SourceTextSubmitForm(request.POST, request.FILES)
         if form.is_valid():
-            pass
+            import core_search
+            return core_search.submit(request, form)
         else:
-            pass
+            args = {'user': request.user, 'authenticated': request.user.is_authenticated(),
+                    'form': form}
+            return _render(request, 'upload.html', args)
     else:
         return _render(request, 'unauthenticated.html', {})
