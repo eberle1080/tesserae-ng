@@ -67,9 +67,30 @@
                   </li>
                 </ul>
               </li>
+{% if authenticated %}
+              <li class="{% block admin_dropdown_class %}dropdown{% endblock %}">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Admin <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                  <li class="nav-header">Text</li>
+                  <li class="{% block nav_upload_class %}{% endblock %}">
+                    <a href="{% block upload_link %}/upload{% endblock %}">Upload Text</a>
+                  </li>
+                </ul>
+              </li>
+{% endif %}
               <li><a href="#about" data-toggle="modal">About</a></li>
               <li><a href="#contact" data-toggle="modal">Contact</a></li>
             </ul>
+{% if authenticated %}
+            <p class="navbar-text pull-right">Hello {{ user.username }} [<a href="/logout" />log out</a>]</p>
+{% else %}
+            <form class="navbar-form pull-right" action="/login" method="post">
+              {% csrf_token %}
+              <input class="span2" type="text" name="login" placeholder="Login">
+              <input class="span2" type="password" name="password" placeholder="Password">
+              <button type="submit" class="btn">Sign in</button>
+            </form>
+{% endif %}
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib import admin
 import reversion
 
+# A top level text
 class SourceText(models.Model):
     LANGUAGE_CHOICES = (
         ('latin', 'Latin'),
@@ -34,3 +35,17 @@ class SourceTextAdmin(reversion.VersionAdmin):
     )
 
 admin.site.register(SourceText, SourceTextAdmin)
+
+class SourceTextLine(models.Model):
+    source = models.ForeignKey(SourceText, on_delete=models.PROTECT)
+    line = models.TextField(db_index=False)
+
+class SourceTextLineAdmin(reversion.VersionAdmin):
+    list_display = ('source', 'line',)
+    fieldsets = (
+        (None, {
+            'fields': ('source', 'line',)
+        }),
+    )
+
+admin.site.register(SourceTextLine, SourceTextLineAdmin)

@@ -1,0 +1,38 @@
+{% extends "main.html" %}
+{% load form_goodies %}
+{% block title %}Tesserae NG - Upload Text{% endblock %}
+{% block nav_upload_class %}active{% endblock %}
+{% block upload_link %}#{% endblock %}
+{% block container %}
+
+  <div class="hero-unit">
+    <h2>Upload a new source text</h2>
+    <form class="form-horizontal" action="/ingest" method="post">
+      {% csrf_token %}
+{% for hidden in form.hidden_fields %}
+      {{ hidden }}
+{% endfor %}
+{% for field in form.visible_fields %}
+      <div class="control-group {% if field.errors %}error{% endif %}">
+        {{ field|label_with_classes:"control-label" }}
+        <div class="controls">
+          {{ field }}
+{% if field.errors %}
+          <span class="help-inline">{{ field.errors }}</span>
+{% else %}
+{% if field.help_text %}
+          <span class="help-inline">{{ field.help_text }}</span>
+{% endif %}
+{% endif %}
+        </div>
+      </div>
+{% endfor %}
+      <div class="control-group">
+        <div class="controls">
+          <input type="submit" class="btn" value="Ingest" />
+        </div>
+      </div>
+    </form>
+  </div>
+
+{% endblock %}
