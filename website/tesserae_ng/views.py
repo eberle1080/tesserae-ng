@@ -1,6 +1,9 @@
 from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
 
+import simplejson as json
+from haystack.query import SearchQuerySet
 from website.tesserae_ng.forms import SourceTextSubmitForm
 
 def _render(request, *args, **kwargs):
@@ -102,3 +105,27 @@ def ingest(request):
             return _render(request, 'upload.html', args)
     else:
         return _render(request, 'unauthenticated.html', {})
+
+@csrf_exempt
+def autocomplete(request):
+
+    from StringIO import StringIO
+    post_json = StringIO(str(request.POST.get('json', '')))
+    post = json.load(post_json)
+
+    field = post['f']
+    text = '(' + post['q'] + ')'
+
+    query = { field + '_auto': text }
+    counts = SearchQuerySet().filter(**query).facet(field).facet_counts()
+
+    print repr(counts)
+
+    results = counts['fields'][field][:5]
+    suggestions = [result[0] for result in results if result[1] > 0]
+
+    the_data = json.dumps({
+        'results': suggestions
+    })
+
+    return HttpResponse(the_data, content_type='application/json')

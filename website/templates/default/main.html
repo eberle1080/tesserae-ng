@@ -11,6 +11,7 @@
     <meta name="viewport" content="width=device-width">
 
     <link rel="stylesheet" href="/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/media/css/jquery-ui.min.css">
     <style>
       {% block default_inlinecss %}
       body {
@@ -150,7 +151,9 @@
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
     <script>window.jQuery || document.write('<script src="/media/js/vendor/jquery-1.9.1.min.js"><\/script>')</script>
 
+    <script src="/media/js/vendor/jquery-ui-1.10.2.min.js"></script>
     <script src="/media/js/vendor/bootstrap.min.js"></script>
     <script src="/media/js/main.js"></script>
+    {% block jsextra %}{% endblock %}
   </body>
 </html>

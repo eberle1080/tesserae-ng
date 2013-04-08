@@ -8,9 +8,21 @@ class SourceTextSubmitForm(forms.Form):
         ('english', 'English')
     )
 
+    def _boundText(auto_source, auto_query, auto_value, input_value, source_value):
+        """
+        Example:
+            _boundText('myPeople', 'getPeople', 'mySelectedGuid', 'name', 'guid')
+        """
+        bind_text = "jqAuto: { autoFocus: true }, jqAutoSource: " + auto_source + ", jqAutoQuery: " + \
+            auto_query + ", jqAutoValue: " + auto_value + ", jqAutoSourceLabel: 'displayName', " + \
+            "jqAutoSourceInputValue: '" + input_value + "', jqAutoSourceValue: '" + source_value + "'"
+
+        return forms.TextInput(attrs={'data-bind':bind_text})
+
     enabled = forms.BooleanField(label='Indexed', required=True, initial=True)
     language = forms.ChoiceField(label='Text language', choices=LANGUAGE_CHOICES, required=True)
-    author = forms.CharField(label='Work author', max_length=255, required=True)
+    author = forms.CharField(label='Work author', max_length=255, required=True,
+                             widget=_boundText('authors', 'getAuthors', 'selectedAuthor', 'name', 'name'))
     title = forms.CharField(label='Work name', max_length=255, required=True)
     volume = forms.CharField(label='Volume name', max_length=255, required=False)
 

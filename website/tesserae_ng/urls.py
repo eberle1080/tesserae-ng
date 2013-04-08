@@ -11,5 +11,6 @@ urlpatterns = patterns('website.tesserae_ng.views',
     url(r'^login$', 'login', name='login'),
     url(r'^upload$', 'upload', name='upload'),
     url(r'^ingest$', 'ingest', name='ingest'),
+    url(r'^autocomplete$', 'autocomplete', name='autocomplete'),
     url(r'^s/', include('haystack.urls'))
 )

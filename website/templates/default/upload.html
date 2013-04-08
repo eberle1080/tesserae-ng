@@ -4,7 +4,6 @@
 {% block nav_upload_class %}active{% endblock %}
 {% block upload_link %}#{% endblock %}
 {% block container %}
-
   <div class="hero-unit">
     <h2>Upload a new source text</h2>
     <form class="form-horizontal" action="/ingest" method="post" enctype="multipart/form-data">
@@ -34,5 +33,5 @@
       </div>
     </form>
   </div>
-
 {% endblock %}
+{% block jsextra %}<script src="/media/js/upload.js"></script>{% endblock %}

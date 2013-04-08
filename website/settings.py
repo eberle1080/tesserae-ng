@@ -116,6 +116,8 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
+HAYSTACK_SIGNAL_PROCESSOR = 'website.tesserae_ng.processor.SourceTextSentenceSignalProcessor'
+
 ROOT_URLCONF = 'website.urls'
 
 # Python dotted path to the WSGI application used by Django's runserver.
