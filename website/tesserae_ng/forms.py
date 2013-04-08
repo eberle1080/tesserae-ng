@@ -23,7 +23,8 @@ class SourceTextSubmitForm(forms.Form):
     language = forms.ChoiceField(label='Text language', choices=LANGUAGE_CHOICES, required=True)
     author = forms.CharField(label='Work author', max_length=255, required=True,
                              widget=_boundText('authors', 'getAuthors', 'selectedAuthor', 'name', 'name'))
-    title = forms.CharField(label='Work name', max_length=255, required=True)
+    title = forms.CharField(label='Work name', max_length=255, required=True,
+                            widget=_boundText('titles', 'getTitles', 'selectedTitle', 'title', 'title'))
     volume = forms.CharField(label='Volume name', max_length=255, required=False)
 
     online_source_name = forms.CharField(label='Online source name', max_length=255, required=False)

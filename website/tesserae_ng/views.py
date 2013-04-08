@@ -5,6 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 import simplejson as json
 from haystack.query import SearchQuerySet
 from website.tesserae_ng.forms import SourceTextSubmitForm
+from website.tesserae_ng.models import SourceText
 
 def _render(request, *args, **kwargs):
     """
@@ -107,6 +108,7 @@ def ingest(request):
         return _render(request, 'unauthenticated.html', {})
 
 @csrf_exempt
+@require_POST
 def autocomplete(request):
 
     from StringIO import StringIO
@@ -114,15 +116,21 @@ def autocomplete(request):
     post = json.load(post_json)
 
     field = post['f']
-    text = '(' + post['q'] + ')'
+    text = post['q'].strip()
 
-    query = { field + '_auto': text }
-    counts = SearchQuerySet().filter(**query).facet(field).facet_counts()
+    query = { field + '__icontains': text }
+    results = list(SourceText.objects.filter(**query))
+    suggestions = []
 
-    print repr(counts)
+    from Levenshtein import distance
+    text_lc = text.lower()
 
-    results = counts['fields'][field][:5]
-    suggestions = [result[0] for result in results if result[1] > 0]
+    def sort_fn(item):
+        value = getattr(item, field)
+        return distance(str(text_lc), str(value.lower()))
+
+    results = sorted(results, key=lambda r: sort_fn(r))
+    suggestions = [getattr(result, field) for result in results[:5]]
 
     the_data = json.dumps({
         'results': suggestions

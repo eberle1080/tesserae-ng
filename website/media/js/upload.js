@@ -116,16 +116,33 @@ function Author(name) {
     }, this);
 }
 
+function Title(title) {
+    this.title = ko.observable(title);
+    this.displayName = ko.dependentObservable(function() {
+        return this.title();
+    }, this);
+}
+
 var viewModel = {
     authors: ko.observableArray(),
-    selectedAuthor: ko.observable("")
+    selectedAuthor: ko.observable(""),
+    titles: ko.observableArray(),
+    selectedTitle: ko.observable("")
 };
 
 function getAuthors(searchTerm, sourceArray) {
-    doAutocomplete('author', searchTerm, sourceArray)
+    doAutocomplete('author', searchTerm, sourceArray, function(txt) {
+        return new Author(txt);
+    });
 }
 
-function doAutocomplete(field, searchTerm, sourceArray) {
+function getTitles(searchTerm, sourceArray) {
+    doAutocomplete('title', searchTerm, sourceArray, function(txt) {
+        return new Title(txt);
+    });
+}
+
+function doAutocomplete(field, searchTerm, sourceArray, createModel) {
     $.ajax({
         type: 'POST',
         url: '/autocomplete',
@@ -140,7 +157,7 @@ function doAutocomplete(field, searchTerm, sourceArray) {
             var results = [];
             var length = data.results.length;
             for (var i = 0; i < length; i++) {
-                results.push(new Author(data.results[i]));
+                results.push(createModel(data.results[i]));
             }
 
             sourceArray(results);

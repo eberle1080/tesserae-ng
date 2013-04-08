@@ -12,7 +12,7 @@ class SourceText(models.Model, DirtyFieldsMixin):
 
     language = models.CharField(max_length=20, choices=LANGUAGE_CHOICES)
     author = models.CharField(max_length=255)
-    title = models.CharField(max_length=255, unique=True)
+    title = models.CharField(max_length=255)
     online_source_name = models.CharField(max_length=4096, null=True, blank=True)
     online_source_link = models.URLField(max_length=4096, null=True, blank=True)
     print_source_name = models.CharField(max_length=4096, null=True, blank=True)
