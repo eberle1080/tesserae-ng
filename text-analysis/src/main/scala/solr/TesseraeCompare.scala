@@ -15,6 +15,7 @@ import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
 import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
 import org.apache.lucene.util.BytesRef
+import org.slf4j.{LoggerFactory, Logger}
 
 final case class TermPositionsListEntry(term: String, position: Int)
 final case class DocumentTermInfo(docID: Int, termCounts: TesseraeCompareHandler.TermCountMap,
@@ -202,6 +203,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
   import TesseraeCompareHandler._
 
+  private lazy val logger = LoggerFactory.getLogger(getClass)
+
   override def init(args: NamedList[_]) {
     super.init(args)
   }
@@ -210,6 +213,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val params = req.getParams
     val returnFields = new SolrReturnFields(req)
     rsp.setReturnFields(returnFields)
+
+    rsp.add("params", req.getParams().toNamedList())
 
     var flags = 0
     if (returnFields.wantsScore) {
@@ -248,46 +253,6 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val targetParams = QueryParameters(TesseraeCompareParams.TQ, TesseraeCompareParams.TF, TesseraeCompareParams.TFL)
     val targetInfo = gatherInfo(req, rsp, targetParams)
-
-    // I'd like to return an xml document roughly like this:
-    // <matches>
-    //   <match>
-    //     <score>1.0</score>
-    //     <distance>13</distance>
-    //     <terms>
-    //       <term>blah</term>
-    //     </terms>
-    //     <source>
-    //       <fields>
-    //         <field1>blah</field1>
-    //         <field2>blarg</field2>
-    //       </fields>
-    //       <highlights>
-    //         <highlight>
-    //           <term>ipicus</term>
-    //           <count>3</count>
-    //           <begin>5</begin>
-    //           <end>10</end>
-    //         </highlight>
-    //       </highlights>
-    //     </source>
-    //     <target>
-    //       <fields>
-    //         <field1>blah</field1>
-    //         <field2>blarg</field2>
-    //       </fields>
-    //       <highlights>
-    //         <highlight>
-    //           <term>ipicus</term>
-    //           <count>1</count>
-    //           <begin>10</begin>
-    //           <end>15</end>
-    //         </highlight>
-    //       </highlights>
-    //     </target>
-    //   </match>
-    //   ...
-    // </matches>
 
     val results = {
       val sortedResults = compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric)
@@ -349,6 +314,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
       matches.add("match", m)
     }
+
+    rsp.add("matches", matches)
   }
 
   private def getMetric(distanceMetric: DistanceMetrics.Value, maxDistance: Int): Distance = {
@@ -475,7 +442,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val parser = QParser.getParser(queryStr, defType, req)
     val query = parser.getQuery
-    //val sorter = parser.getSort(true)
+    val sorter = parser.getSort(true)
     val searcher = req.getSearcher
     val reader = searcher.getIndexReader
 
@@ -516,30 +483,27 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
     }
 
-    val qc = new SolrIndexSearcher.QueryCommand
-    qc.setQuery(query).setFilter(null).setSort(null).setOffset(0)
-    val qr = new SolrIndexSearcher.QueryResult
-    searcher.search(qr, qc)
+    val secondParam: java.util.List[org.apache.lucene.search.Query] = null
+    val listAndSet = searcher.getDocListAndSet(query, secondParam, null, 0, 10)
+    val dlit = listAndSet.docSet.iterator()
 
-    val docList = qr.getDocList
-    val dlit = docList.iterator()
+    logger.info("Using query '" + queryStr + "' found " + listAndSet.docSet.size + " documents")
 
     var termInfo: QueryTermInfo = Map.empty
 
     while (dlit.hasNext) {
       val docId = dlit.nextDoc()
       val vec = reader.getTermVector(docId, searchField)
-      val dti = mapOneVector(reader, docId, vec.iterator(null), searchField)
-      termInfo += docId -> dti
+
+      if (vec != null) {
+        val dti = mapOneVector(reader, docId, vec.iterator(null), searchField)
+        termInfo += docId -> dti
+      }
     }
 
-    QueryInfo(termInfo, returnFields, (offset, count) => {
-      val qcB = new SolrIndexSearcher.QueryCommand
-      qcB.setQuery(query).setFilter(null).setSort(null).setOffset(offset).setLen(count)
-      val qrB = new SolrIndexSearcher.QueryResult
-      searcher.search(qrB, qcB)
-      qrB.getDocList
-    })
+    logger.info("Using query '" + queryStr + "' found " + termInfo.size + " actual results")
+
+    QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList)
   }
 
   private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {

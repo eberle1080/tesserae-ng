@@ -987,6 +987,9 @@
        -->
   </requestHandler>
 
+  <requestHandler name="/compare" class="org.apache.solr.handler.tesserae.TesseraeCompareHandler">
+  </requestHandler>
+
   <!-- for back compat with clients using /update/json and /update/csv -->  
   <requestHandler name="/update/json" class="solr.JsonUpdateRequestHandler">
         <lst name="defaults">
