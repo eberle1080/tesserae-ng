@@ -2,13 +2,11 @@
 <schema name="latin" version="1.5">
  <fields>
    <field name="id" type="string" indexed="true" stored="true" required="true" multiValued="false" />
+   <field name="volume_id" type="int" indexed="true" stored="true" multiValued="false"/>
+   <field name="source_id" type="int" indexed="true" stored="true" multiValued="false"/>
    <field name="django_ct" type="string" indexed="true" stored="true" multiValued="false"/>
    <field name="django_id" type="string" indexed="true" stored="true" multiValued="false"/>
-
    <field name="author" type="text_general" indexed="true" stored="true" multiValued="false"/>
-   <field name="author_exact" type="string" indexed="true" stored="true" multiValued="false"/>
-   <field name="author_auto" type="edge_ngram" indexed="true" stored="true" multiValued="false"/>
-
    <field name="title" type="text_general" indexed="true" stored="true" />
    <field name="volume" type="text_general" indexed="true" stored="true" />
    <field name="online_source_name" type="text_general" indexed="true" stored="true"/>

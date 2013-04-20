@@ -53,14 +53,14 @@ admin.site.register(SourceTextVolume, SourceTextVolumeAdmin)
 class SourceTextSentence(models.Model, DirtyFieldsMixin):
     volume = models.ForeignKey(SourceTextVolume, on_delete=models.PROTECT)
     sentence = models.TextField(db_index=False)
-    start_line_num = models.IntegerField()
-    end_line_num = models.IntegerField()
+    start_line = models.CharField(max_length=255)
+    end_line = models.CharField(max_length=255)
 
 class SourceTextSentenceAdmin(reversion.VersionAdmin):
     list_display = ('volume', 'sentence',)
     fieldsets = (
         (None, {
-            'fields': ('volume', 'sentence', 'start_line_num', 'end_line_num')
+            'fields': ('volume', 'sentence', 'start_line', 'end_line')
         }),
     )
 

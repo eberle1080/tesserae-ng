@@ -97,10 +97,9 @@ def parse_text(request):
         return (None, None)
 
     # Input files must be in .tess format
+    lines = []
     rex = r'^<([^>]+)>[\t](.*)$'
     lrex = r'([0-9]+)(-([0-9]+))?$'
-
-    lines = []
 
     for line in re.split(r'[\n\r]+', text_value):
         line = line.strip()
@@ -113,17 +112,49 @@ def parse_text(request):
         right = match.group(2)
 
         line_info = re.search(lrex, left)
-        start = int(line_info.group(1))
-        if line_info.group(3) is not None:
-            end = int(line_info.group(3))
+        if line_info is not None:
+            start = line_info.group(1)
+            if line_info.group(3) is not None:
+                end = line_info.group(3)
+            else:
+                end = start
         else:
-            end = start
+            start = 0
+            end = 0
 
         lines.append((right, start, end))
 
-    text_value = '\n'.join([l[0] for l in lines])
+    sentences = []
+    phrase_delimiter = r'([.?!;:])'
+    only_delimeter = re.compile(r'^[.?!;:]$')
+    full_text = '\n'.join([l[0] for l in lines])
 
-    return (text_value, lines)
+    current_sentence = None
+    for text, start, end in lines:
+        text = text.strip()
+        parts = re.split(phrase_delimiter, text)
+
+        for part in parts:
+            if only_delimeter.match(part) is not None:
+                # This is a delimeter
+                if current_sentence is None:
+                    # Ignore it
+                    pass
+                else:
+                    sentence = (current_sentence[0] + part).strip()
+                    sent_start = current_sentence[1]
+                    sent_end = end
+                    if len(current_sentence[0].strip()) > 0:
+                        sentences.append((sentence, sent_start, sent_end))
+                    current_sentence = None
+            else:
+                # Not a delimeter
+                if current_sentence is None:
+                    current_sentence = (part, start, end)
+                else:
+                    current_sentence = (current_sentence[0] + ' ' + part, current_sentence[1], end)
+
+    return (full_text, sentences)
 
 def submit(request, form):
     """
@@ -148,8 +179,8 @@ def submit(request, form):
     volume.sourcetextsentence_set.all().delete()
     bulk = []
     for sent in sentences:
-        (line, begin, end) = sent
-        bulk.append(SourceTextSentence(volume=volume, sentence=line, start_line_num=begin, end_line_num=end))
+        (text, begin, end) = sent
+        bulk.append(SourceTextSentence(volume=volume, sentence=text, start_line=begin, end_line=end))
     SourceTextSentence.objects.bulk_create(bulk)
 
     return _render(request, 'submitted.html', args)
