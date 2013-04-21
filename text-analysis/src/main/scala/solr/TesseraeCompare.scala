@@ -14,8 +14,9 @@ import org.apache.solr.search._
 import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
 import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
-import org.apache.lucene.util.BytesRef
+import org.apache.lucene.util.{Attribute, BytesRef}
 import org.slf4j.{LoggerFactory, Logger}
+import org.apache.lucene.analysis.tokenattributes.TypeAttribute
 
 final case class TermPositionsListEntry(term: String, position: Int)
 final case class DocumentTermInfo(docID: Int, termCounts: TesseraeCompareHandler.TermCountMap,
@@ -24,7 +25,7 @@ final case class QueryParameters(qParamName: String, searchFieldParamName: Strin
 final case class QueryInfo(termInfo: TesseraeCompareHandler.QueryTermInfo, fieldList: List[String], searcher: (Int, Int) => DocList)
 final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
 final case class DistanceParameters(pair: DocumentPair, commonTerms: Set[String], source: QueryInfo, target: QueryInfo)
-final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Int, distance: Int)
+final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Double, distance: Int)
 
 object TesseraeCompareHandler {
   val DEFAULT_MAX_DISTANCE = 0 // 0 = no max
@@ -49,7 +50,7 @@ object TesseraeCompareHandler {
 }
 
 object DistanceMetrics extends Enumeration {
-  val FREQ, FREQ_TARGET, FREQ_SOURCE, SPAN, SPAN_TARGET, SPAN_SOURCE, ZERO = Value
+  val FREQ, FREQ_TARGET, FREQ_SOURCE, SPAN, SPAN_TARGET, SPAN_SOURCE = Value
   val DEFAULT_METRIC = FREQ
 
   def apply(str: String): Option[Value] = {
@@ -75,7 +76,6 @@ object DistanceMetrics extends Enumeration {
       case SPAN => Some(new SpanDistance)
       case SPAN_TARGET => Some(new SpanTargetDistance)
       case SPAN_SOURCE => Some(new SpanSourceDistance)
-      case ZERO => Some(new ZeroDistance)
       case _ => None
     }
   }
@@ -83,10 +83,6 @@ object DistanceMetrics extends Enumeration {
 
 trait Distance {
   def calculateDistance(params: DistanceParameters): Option[Int]
-}
-
-class ZeroDistance extends Distance {
-  def calculateDistance(params: DistanceParameters) = Some(0)
 }
 
 // Some re-usable distance functions
@@ -103,8 +99,39 @@ trait DistanceMixin {
     counts.sortWith { (a, b) => a._1 < b._1 }
   }
 
-  protected def sortedPositions(id: Int, info: QueryInfo): TermPositionsList = {
+  protected def filterPositions(tpl: TermPositionsList): TermPositionsList = {
+    var entriesMap: Map[Int, String] = Map.empty
+    tpl.foreach { entry =>
+      val termLen = entry.term.length
+      entriesMap.get(entry.position) match {
+        case None =>
+          entriesMap += entry.position -> entry.term
+        case Some(priorTerm) =>
+          val prLen = priorTerm.length
+          if (termLen > prLen) {
+            entriesMap += entry.position -> entry.term
+          } else if (termLen == prLen) {
+            // choose alphabetically
+            if (entry.term.compareTo(priorTerm) > 0) {
+              entriesMap += entry.position -> entry.term
+            }
+          } else {
+            // leave the old one alone
+          }
+      }
+    }
+
+    var list: TermPositionsList = Nil
+    entriesMap.foreach { case (pos, term) =>
+      list = TermPositionsListEntry(term, pos) :: list
+    }
+
+    list
+  }
+
+  protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermPositionsList = {
     val terms = info.termInfo(id).termPositions
+    val filtered = if (filter) { filterPositions(terms) } else { terms }
     terms.sortWith { (a, b) => a.position < b.position }
   }
 
@@ -223,7 +250,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val start = params.getInt(CommonParams.START, 0)
     val rows = params.getInt(CommonParams.ROWS, 10)
-    val maxDistance = params.getInt(TesseraeCompareParams.MD, 0)
+    val maxDistance = params.getInt(TesseraeCompareParams.MD, DEFAULT_MAX_DISTANCE)
     val minCommonTerms = params.getInt(TesseraeCompareParams.MCT, DEFAULT_MIN_COMMON_TERMS)
     if (minCommonTerms < 2) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "min common terms can't be less than 2")
@@ -286,8 +313,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val matches = new TesseraeMatches
     results.foreach { result =>
       val m = new TesseraeMatch
-      m.add("score", new Integer(result.score))
-      m.add("distance", new Integer(result.distance))
+      m.add("score", new java.lang.Double(result.score))
+      m.add("distance", new java.lang.Double(result.distance))
 
       val terms = new TermList
       result.commonTerms.toList.sorted.foreach { term =>
@@ -319,12 +346,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   }
 
   private def getMetric(distanceMetric: DistanceMetrics.Value, maxDistance: Int): Distance = {
-    val dm = if (maxDistance <= 0) {
-      DistanceMetrics(DistanceMetrics.ZERO)
-    } else {
-      DistanceMetrics(distanceMetric)
-    }
-
+    val dm = DistanceMetrics(distanceMetric)
     dm match {
       case None => throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "invalid metric: " + distanceMetric.toString)
       case Some(d) => d
@@ -347,9 +369,22 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     docPairs.foreach { case (pair, terms) =>
       val params = DistanceParameters(pair, terms, source, target)
       metric.calculateDistance(params).map { distance =>
-        if (distance <= maxDistance) {
-          // TODO: Calculate score
-          results = CompareResult(pair, terms, 0, distance) :: results
+        if (distance <= maxDistance || maxDistance <= 0) {
+
+          logger.info("Distance is " + distance)
+
+          var score = 0.0
+          terms.foreach { term =>
+            val sourceCount = source.termInfo(pair.sourceDoc).termCounts(term)
+            val targetCount = target.termInfo(pair.targetDoc).termCounts(term)
+            val sFreq = ((1.0) / (sourceCount.toDouble))
+            val tFreq = ((1.0) / (targetCount.toDouble))
+            score += sFreq + tFreq
+          }
+
+          val finalScore = math.log(score / distance.toDouble)
+          val result = CompareResult(pair, terms, finalScore, distance)
+          results = result :: results
         }
       }
     }
@@ -512,9 +547,16 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     var positions: TermPositionsList = Nil
     var counts: TermCountMap = Map.empty
 
+    // TODO: Fix this. This right here is a damn shame. Basically here's the story:
+    // each position can have more than one term. In the latin analyzer, this strategy
+    // is used to store, say, a verb-stem and noun-stem of an ambiguous word.
+    // as it is currently, this might pick up the noun, this might pick up the verb.
+    var knownPositions: Set[Int] = Set.empty
+
     while(text != null) {
       val term = text.utf8ToString
       val freq = termsEnum.totalTermFreq.toInt
+      var termType: Option[Attribute] = None
 
       dpEnum = termsEnum.docsAndPositions(null, dpEnum)
       if (dpEnum == null) {
@@ -524,10 +566,13 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       dpEnum.nextDoc()
       for (i <- 0 until freq) {
         val pos = dpEnum.nextPosition
-        val entry = TermPositionsListEntry(term, pos)
-        positions = entry :: positions
-        val oldCount = counts.getOrElse(term, 0)
-        counts += term -> (oldCount + 1)
+        if (!knownPositions.contains(pos)) {
+          val entry = TermPositionsListEntry(term, pos)
+          positions = entry :: positions
+          knownPositions += pos
+          val oldCount = counts.getOrElse(term, 0)
+          counts += term -> (oldCount + 1)
+        }
       }
 
       text = termsEnum.next()
