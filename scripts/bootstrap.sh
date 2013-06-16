@@ -90,7 +90,10 @@ echo "Initializing django database..."
 [ -f scripts/init_db.sh ] || die "Missing file: scripts/init_db.sh"
 sudo scripts/init_db.sh || die "start failed"
 
+echo "Starting uwsgi web server..."
+sudo supervisorctl start tesserae-ng
 
+echo "All done."
 
 echo '*******************************************************************************'
 echo '* End tesserae-ng bootstrap                                                   *'
