@@ -1,6 +1,9 @@
 # Django settings for website project.
 
-DEBUG = True
+import djcelery
+djcelery.setup_loader()
+
+DEBUG = False
 TEMPLATE_DEBUG = DEBUG
 
 ADMINS = (
@@ -27,9 +30,12 @@ HAYSTACK_CONNECTIONS = {
     },
 }
 
+# For celery
+BROKER_URL = 'amqp://tesserae-ng:QAwSSvV8HeNNOXEfokrK@localhost:5672/tesserae-ng'
+
 # Hosts/domain names that are valid for this site; required if DEBUG is False
 # See https://docs.djangoproject.com/en/{{ docs_version }}/ref/settings/#allowed-hosts
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = '*'
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -85,7 +91,6 @@ STATICFILES_DIRS = (
 STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-#    'django.contrib.staticfiles.finders.DefaultStorageFinder',
 )
 
 # Make this unique, and don't share it with anybody.
@@ -95,7 +100,6 @@ SECRET_KEY = '_d(ec5q6(5qkqh+)xro*ea$r^u-=h6b^lj!i5pby_r=7r=61#2'
 TEMPLATE_LOADERS = (
     'django.template.loaders.filesystem.Loader',
     'django.template.loaders.app_directories.Loader',
-#     'django.template.loaders.eggs.Loader',
 )
 
 CACHES = {
@@ -141,6 +145,7 @@ INSTALLED_APPS = (
     'reversion',
     'haystack',
     'website.tesserae_ng',
+    'djcelery',
     'south'
 )
 
@@ -157,18 +162,50 @@ LOGGING = {
             '()': 'django.utils.log.RequireDebugFalse'
         }
     },
+    'formatters': {
+        'standard': {
+            'format' : "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            'datefmt' : "%d/%b/%Y %H:%M:%S"
+        },
+    },
     'handlers': {
+        'null': {
+            'level': 'DEBUG',
+            'class': 'django.utils.log.NullHandler',
+        },
         'mail_admins': {
             'level': 'ERROR',
             'filters': ['require_debug_false'],
             'class': 'django.utils.log.AdminEmailHandler'
-        }
+        },
+        'logfile': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/var/log/django/logfile',
+            'maxBytes': 50000,
+            'backupCount': 2,
+            'formatter': 'standard',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard'
+        },
     },
     'loggers': {
+        'django': {
+            'handlers': ['console', 'logfile'],
+            'propagate': True,
+            'level': 'INFO',
+        },
         'django.request': {
             'handlers': ['mail_admins'],
             'level': 'ERROR',
             'propagate': True,
+        },
+        'website': {
+            'handlers': ['console', 'logfile'],
+            'level': 'DEBUG',
         },
     }
 }

@@ -4,7 +4,9 @@ version := "1.0"
 
 scalaVersion := "2.10.2"
 
-libraryDependencies += "org.apache.solr" % "solr-core" % "4.3.0"
+libraryDependencies += "org.scala-lang" % "scala-library" % "2.10.2"
+
+libraryDependencies += "org.apache.solr" % "solr-core" % "4.3.1"
 
 libraryDependencies += "com.typesafe.akka" % "akka-actor_2.10" % "2.1.4"
 
