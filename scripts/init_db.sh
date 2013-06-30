@@ -28,6 +28,9 @@ else
     echo "*** Creating initial superuser..."
     python2.7 /vagrant/scripts/make_superuser.py
 
+    echo "*** Creating initial revisions..."
+    python2.7 ./manage.py createinitialrevisions
+
     echo "*** Running update_index..."
     python2.7 ./manage.py update_index
 fi

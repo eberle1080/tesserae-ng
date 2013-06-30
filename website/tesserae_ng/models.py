@@ -19,6 +19,8 @@ class SourceText(models.Model, DirtyFieldsMixin):
     print_source_link = models.URLField(max_length=4096, null=True, blank=True)
     enabled = models.BooleanField(default=True)
 
+reversion.register(SourceText)
+
 class SourceTextAdmin(reversion.VersionAdmin):
     list_display = ('title', 'author', 'language')
     fieldsets = (
@@ -35,6 +37,8 @@ class SourceTextVolume(models.Model, DirtyFieldsMixin):
     source = models.ForeignKey(SourceText, on_delete=models.PROTECT)
     volume = models.CharField(max_length=255)
     text = models.TextField(db_index=False)
+
+reversion.register(SourceTextVolume)
 
 class SourceTextVolumeAdmin(reversion.VersionAdmin):
     list_display = ('source', 'volume')
@@ -55,6 +59,8 @@ class SourceTextSentence(models.Model, DirtyFieldsMixin):
     sentence = models.TextField(db_index=False)
     start_line = models.CharField(max_length=255)
     end_line = models.CharField(max_length=255)
+
+reversion.register(SourceTextSentence)
 
 class SourceTextSentenceAdmin(reversion.VersionAdmin):
     list_display = ('volume', 'sentence',)

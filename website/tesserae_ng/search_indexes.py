@@ -1,7 +1,8 @@
 from haystack import indexes
+from celery_haystack.indexes import CelerySearchIndex
 from models import SourceTextSentence
 
-class SourceTextIndex(indexes.SearchIndex, indexes.Indexable):
+class SourceTextIndex(CelerySearchIndex, indexes.Indexable):
     text = indexes.CharField(model_attr='sentence', document=True)
     volume_id = indexes.IntegerField(model_attr='volume__id')
     source_id = indexes.IntegerField(model_attr='volume__source__id')

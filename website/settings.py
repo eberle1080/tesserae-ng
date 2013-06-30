@@ -120,7 +120,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
-HAYSTACK_SIGNAL_PROCESSOR = 'website.tesserae_ng.processor.SourceTextSentenceSignalProcessor'
+HAYSTACK_SIGNAL_PROCESSOR = 'website.signals.TesseraeNGSignalProcessor'
 
 ROOT_URLCONF = 'website.urls'
 
@@ -144,6 +144,7 @@ INSTALLED_APPS = (
     'django.contrib.admin',
     'reversion',
     'haystack',
+    'celery_haystack',
     'website.tesserae_ng',
     'djcelery',
     'south'

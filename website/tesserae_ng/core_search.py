@@ -5,6 +5,7 @@ from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET, require_POST
 from views import _render
 from website.tesserae_ng.models import SourceText, SourceTextSentence
+import reversion
 
 def search(request, language, level):
     """
@@ -177,10 +178,10 @@ def submit(request, form):
         volume.save()
 
     volume.sourcetextsentence_set.all().delete()
-    bulk = []
-    for sent in sentences:
-        (text, begin, end) = sent
-        bulk.append(SourceTextSentence(volume=volume, sentence=text, start_line=begin, end_line=end))
-    SourceTextSentence.objects.bulk_create(bulk)
+    with reversion.create_revision():
+        reversion.set_user(request.user)
+        for sent in sentences:
+            (text, begin, end) = sent
+            SourceTextSentence.objects.create(volume=volume, sentence=text, start_line=begin, end_line=end)
 
     return _render(request, 'submitted.html', args)
