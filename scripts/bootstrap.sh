@@ -49,8 +49,8 @@ sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" "text-analysis_2.10-1.
 
 echo "Setting up Solr home..."
 cd /vagrant
-[ -f setenv.sh ] || die "Missing file: setenv.sh"
-sudo install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" setenv.sh || die "install failed: setenv.sh"
+[ -f scripts/setenv.sh ] || die "Missing file: scripts/setenv.sh"
+sudo install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" scripts/setenv.sh || die "install failed: scripts/setenv.sh"
 
 [ -d solr ] || die "Missing directory: solr"
 sudo rm -rf /home/tesserae/solr || die "rm failed"
