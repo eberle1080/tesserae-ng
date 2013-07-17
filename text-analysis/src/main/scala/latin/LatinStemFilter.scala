@@ -1,7 +1,5 @@
 package org.apache.lucene.analysis.la
 
-import java.io.IOException
-
 import org.apache.lucene.analysis.TokenFilter
 import org.apache.lucene.analysis.TokenStream
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
@@ -9,19 +7,21 @@ import org.apache.lucene.analysis.tokenattributes.KeywordAttribute
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute
+import org.apache.solr.handler.tesserae.NGramAttribute
 
 object LatinStemFilter {
   val TYPE_NOUN = "LATIN_NOUN"
   val TYPE_VERB = "LATIN_VERB"
 }
 
-final class LatinStemFilter(input: TokenStream) extends TokenFilter(input) {
+final class LatinStemFilter(input: TokenStream, args: Map[String, String]) extends TokenFilter(input) {
   private val stemmer = new LatinStemmer
   private val termAtt: CharTermAttribute = addAttribute(classOf[CharTermAttribute])
   private val offsetAtt: OffsetAttribute = addAttribute(classOf[OffsetAttribute])
   private val posIncAtt: PositionIncrementAttribute = addAttribute(classOf[PositionIncrementAttribute])
   private val typeAtt: TypeAttribute = addAttribute(classOf[TypeAttribute])
   private val keywordAttr: KeywordAttribute = addAttribute(classOf[KeywordAttribute])
+  private val ngramAttr: NGramAttribute = addAttribute(classOf[NGramAttribute])
   private var stemAsNoun = true
 
   private var currentTokenBuffer: Array[Char] = null
@@ -30,20 +30,20 @@ final class LatinStemFilter(input: TokenStream) extends TokenFilter(input) {
   private var currentTokenEnd: Int = 0
   private var currentTokenPosition: Int = 0
 
-  override final def incrementToken(): Boolean = {
+  override def incrementToken(): Boolean = {
     if (currentTokenBuffer == null) {
       if (!input.incrementToken()) {
         return false
       } else {
-        if (keywordAttr.isKeyword()) {
-          return true;
+        if (keywordAttr.isKeyword) {
+          return true
         }
 
-        currentTokenBuffer = termAtt.buffer().clone();
-        currentTokenLength = termAtt.length();
-        currentTokenStart = offsetAtt.startOffset();
-        currentTokenEnd = offsetAtt.endOffset();
-        currentTokenPosition = posIncAtt.getPositionIncrement();
+        currentTokenBuffer = termAtt.buffer().clone()
+        currentTokenLength = termAtt.length()
+        currentTokenStart = offsetAtt.startOffset()
+        currentTokenEnd = offsetAtt.endOffset()
+        currentTokenPosition = posIncAtt.getPositionIncrement
       }
     }
 
@@ -76,8 +76,9 @@ final class LatinStemFilter(input: TokenStream) extends TokenFilter(input) {
       posIncAtt.setPositionIncrement(0)
     }
 
+    ngramAttr.setFromString(stemmedToken)
     termAtt.setEmpty().append(stemmedToken)
-    termAtt.setLength(stemmedToken.length())
+    termAtt.setLength(stemmedToken.length)
     offsetAtt.setOffset(currentTokenStart, currentTokenEnd)
     typeAtt.setType(tokenType)
 

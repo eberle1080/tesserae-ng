@@ -11,6 +11,15 @@ echo '* Begin tesserae-ng bootstrap                                             
 echo '*******************************************************************************'
 echo ''
 
+if [ -f /home/vagrant/.bootstrapped ]; then
+    echo ' Bootstrap has already been run, will not continue'
+    echo ''
+    echo '*******************************************************************************'
+    echo '* End tesserae-ng bootstrap                                                   *'
+    echo '*******************************************************************************'
+    exit 0
+fi
+
 [ -d /vagrant ] || die "Missing directory: /vagrant"
 cd /vagrant || die "Can't cd to /vagrant"
 
@@ -120,6 +129,14 @@ sudo install -o root -g root -m 755 -t "/usr/local/sbin" supervisor/tesserae-ng.
 echo "Starting uWSGI web server..."
 sudo supervisorctl update
 
+echo "Poking a few holes in the firewall..."
+sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 8080 -m conntrack --ctstate NEW -j ACCEPT
+sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 9000 -m conntrack --ctstate NEW -j ACCEPT
+
+echo "Saving firewall state..."
+sudo iptables-save > /etc/firewall.conf
+
+touch /home/vagrant/.bootstrapped || die "can't touch this"
 echo "All done."
 
 echo '*******************************************************************************'
