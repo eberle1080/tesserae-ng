@@ -6,6 +6,7 @@ import org.apache.lucene.util.AttributeImpl
 object NGramsGenerator {
   import scala.collection.JavaConversions._
   import scala.collection.mutable.{Queue => MutableQueue}
+  import java.util.StringTokenizer
 
   // each ngram is represented as a List of String
   def generate(text: String, minSize: Int, maxSize: Int) = {
@@ -48,7 +49,7 @@ object NGramsGenerator {
   }
 
   // Utility class to store the last maxSize encountered tokens
-  class SlidingFixedSizeQueue[A](val maxSize: Int) extends MutableQueue[A] {
+  class SlidingFixedSizeQueue[A](val maxSize: Int) extends scala.collection.mutable.Queue[A] {
     override def enqueue(elems: A*) = {
       elems.foreach(super.enqueue(_))
       while (this.size > this.maxSize)
