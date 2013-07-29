@@ -23,3 +23,17 @@ Texts
 -----
 Tesserae NG expects all uploaded texts to be in `.tess` format. If you want to get up and running quickly, visit the [Tesserae repository](https://github.com/tesserae/tesserae)
 and see the `texts` directory.
+
+Hacking
+-----
+If you want to modify the source code, go ahead and work on your local box (the one where you initially cloned the git repo). Once you're done, log in to the (presumably running) box:
+
+    $> ssh -p 2222 tesserae@localhost
+
+The password is `tesserae` Now run the refresh script (in the `tesserae` user's home directory):
+
+    $> ./refresh.sh
+
+You'll be prompted for your password. Again, the password is `tesserae` This will update all of the required source files and configuration files and install them in their proper places. You can now visit `localhost:8000` to see your changes.
+
+If you're hacking on the Solr code, you can visit the Solr console here: `http://localhost:8080/solr`
