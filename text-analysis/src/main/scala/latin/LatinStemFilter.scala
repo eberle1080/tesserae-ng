@@ -7,8 +7,7 @@ import org.apache.lucene.analysis.tokenattributes.KeywordAttribute
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute
-import org.apache.solr.handler.tesserae.{NGramSummaryAttribute, NGramAttribute}
-import org.slf4j.LoggerFactory
+import org.apache.solr.handler.tesserae.NGramAttribute
 
 object LatinStemFilter {
   val TYPE_NOUN = "LATIN_NOUN"
@@ -16,8 +15,6 @@ object LatinStemFilter {
 }
 
 final class LatinStemFilter(input: TokenStream, args: Map[String, String]) extends TokenFilter(input) {
-  private lazy val logger = LoggerFactory.getLogger(getClass)
-
   private val stemmer = new LatinStemmer
   private val termAtt: CharTermAttribute = addAttribute(classOf[CharTermAttribute])
   private val offsetAtt: OffsetAttribute = addAttribute(classOf[OffsetAttribute])
@@ -25,7 +22,6 @@ final class LatinStemFilter(input: TokenStream, args: Map[String, String]) exten
   private val typeAtt: TypeAttribute = addAttribute(classOf[TypeAttribute])
   private val keywordAttr: KeywordAttribute = addAttribute(classOf[KeywordAttribute])
   private val ngramAttr: NGramAttribute = addAttribute(classOf[NGramAttribute])
-  private val ngramSummaryAttr: NGramSummaryAttribute = addAttribute(classOf[NGramSummaryAttribute])
   private var stemAsNoun = true
 
   private var currentTokenBuffer: Array[Char] = null
@@ -81,7 +77,6 @@ final class LatinStemFilter(input: TokenStream, args: Map[String, String]) exten
     }
 
     ngramAttr.setFromString(stemmedToken)
-    ngramSummaryAttr.addNGrams(ngramAttr)
     termAtt.setEmpty().append(stemmedToken)
     termAtt.setLength(stemmedToken.length)
     offsetAtt.setOffset(currentTokenStart, currentTokenEnd)

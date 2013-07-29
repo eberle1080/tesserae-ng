@@ -28,12 +28,16 @@ object NGramsGenerator {
   // generate a list of ngrams
   def generate_sub(text: String, minSize: Int, maxSize: Int) = {
     val nGramsBuffer = new NGramsBuffer(minSize, maxSize)
-    for (c <- text)
+    for (t <- this.getTokenizerIterator(text))
       yield {
-        nGramsBuffer.addToken(Character.toString(c))
+        nGramsBuffer.addToken(t.asInstanceOf[String])
         nGramsBuffer.getNGrams
       }
   }
+
+  // Can be overloaded to use an other tokenizer
+  def getTokenizerIterator(text: String) =
+    new StringTokenizer(text, "")
 
   // A utility class that stores a list of fixed size queues, each queue is a current ngram
   class NGramsBuffer(val minSize: Int, val maxSize: Int) {
