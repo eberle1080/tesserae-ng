@@ -12,6 +12,9 @@ if [ $ME -ne 0 ]; then
     exit $?
 fi
 
+[ -f /home/tesserae/.bash_local ] || die "Missing file: /home/tesserae/.bash_local"
+source /home/tesserae/.bash_local
+
 if [ ! -f /home/vagrant/.bootstrapped ]; then
     die "Bootstrap hasn't been run!"
 fi

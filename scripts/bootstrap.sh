@@ -136,6 +136,10 @@ sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 9000 -m conntrack --ctstate
 echo "Saving firewall state..."
 sudo iptables-save > /etc/firewall.conf
 
+echo "Installing refresh script links..."
+[ -f scripts/refresh.sh ] || die "Missing file: scripts/refresh.sh"
+sudo ln -s /vagrant/scripts/refresh.sh /home/tesserae/refresh.sh
+
 touch /home/vagrant/.bootstrapped || die "can't touch this"
 echo "All done."
 
