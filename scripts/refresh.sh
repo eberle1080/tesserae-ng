@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PROGNAME=$(basename $0)
 function die {
@@ -130,7 +130,7 @@ done
 
 echo "Refreshing Django database"
 [ -f scripts/refresh_db.sh ] || die "script missing: scripts/refresh_db.sh"
-/bin/bash scripts/refresh_db.sh
+scripts/refresh_db.sh
 
 echo "Starting uWSGI web server..."
 supervisorctl start tesserae-ng
