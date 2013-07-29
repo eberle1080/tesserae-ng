@@ -5,6 +5,7 @@ from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET, require_POST
 from views import _render
 from website.tesserae_ng.models import SourceText, SourceTextSentence
+from website.tesserae_ng.forms import SimpleSearchForm
 import reversion
 
 def search(request, language, level):
@@ -13,7 +14,8 @@ def search(request, language, level):
     """
 
     args = {'language': language, 'user': request.user,
-            'authenticated': request.user.is_authenticated()}
+            'authenticated': request.user.is_authenticated(),
+            'form': SimpleSearchForm() }
 
     if request.method == 'GET':
         if language in ('latin', 'greek', 'english'):

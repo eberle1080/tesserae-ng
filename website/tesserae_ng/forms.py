@@ -1,4 +1,8 @@
 from django import forms
+import logging
+from website.tesserae_ng.models import SourceTextVolume
+
+logger = logging.getLogger(__name__)
 
 class SourceTextSubmitForm(forms.Form):
 
@@ -33,3 +37,15 @@ class SourceTextSubmitForm(forms.Form):
     print_source_link = forms.URLField(label='Print source URL', required=False)
 
     source_file = forms.FileField(allow_empty_file=False, required=True, label='Source file')
+
+
+class STVChoiceField(forms.ModelChoiceField):
+
+    def label_from_instance(self, obj):
+        return obj.source.title + " (" + obj.volume + ")"
+
+
+class SimpleSearchForm(forms.Form):
+
+    source = STVChoiceField(queryset=SourceTextVolume.objects, empty_label="Choose a source text")
+    target = STVChoiceField(queryset=SourceTextVolume.objects, empty_label="Choose a target text")

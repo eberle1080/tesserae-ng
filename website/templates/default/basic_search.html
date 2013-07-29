@@ -1,9 +1,36 @@
 {% extends "main.html" %}
+{% load form_goodies %}
 {% block title %}Tesserae NG - Basic {{ language|capfirst }} Search{% endblock %}
 {% block nav_lbs_class %}active{% endblock %}
 {% block lbs_link %}#{% endblock %}
 {% block container %}
-
-
-
+  <div class="hero-unit">
+    <h2>Basic {{ language|capfirst }} Search</h2>
+    <form class="form-horizontal" action="/search/{{ language }}/basic" method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+{% for hidden in form.hidden_fields %}
+      {{ hidden }}
+{% endfor %}
+{% for field in form.visible_fields %}
+      <div class="control-group {% if field.errors %}error{% endif %}">
+        {{ field|label_with_classes:"control-label" }}
+        <div class="controls">
+          {{ field }}
+{% if field.errors %}
+          <span class="help-inline">{{ field.errors }}</span>
+{% else %}
+{% if field.help_text %}
+          <span class="help-inline">{{ field.help_text }}</span>
+{% endif %}
+{% endif %}
+        </div>
+      </div>
+{% endfor %}
+      <div class="control-group">
+        <div class="controls">
+          <input type="submit" class="btn" value="Compare" />
+        </div>
+      </div>
+    </form>
+  </div>
 {% endblock %}
