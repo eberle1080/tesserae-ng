@@ -222,10 +222,6 @@ class SpanSourceDistance extends SpanDistance {
     internalDistance(params.pair.sourceDoc, params.source)
 }
 
-object TesseraeScoring {
-
-}
-
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
   import TesseraeCompareHandler._
@@ -377,8 +373,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
           terms.foreach { term =>
             val sourceCount = source.termInfo(pair.sourceDoc).termCounts(term)
             val targetCount = target.termInfo(pair.targetDoc).termCounts(term)
-            val sFreq = ((1.0) / (sourceCount.toDouble))
-            val tFreq = ((1.0) / (targetCount.toDouble))
+            val sFreq = 1.0 / sourceCount.toDouble
+            val tFreq = 1.0 / targetCount.toDouble
             score += sFreq + tFreq
           }
 
@@ -423,7 +419,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Make it immutable
     pairCounts.map { case (pair, terms) =>
-      ((pair, terms.toSet))
+      (pair, terms.toSet)
     }
   }
 
@@ -462,7 +458,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Make it immutable
     sourceTermMash.map { case (term, set) =>
-      ((term, set.toSet))
+      (term, set.toSet)
     }
   }
 
