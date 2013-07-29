@@ -15,14 +15,14 @@ import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
 import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
 import org.apache.lucene.util.{Attribute, BytesRef}
-import org.slf4j.LoggerFactory
-import org.apache.lucene.analysis.{TokenStream, Analyzer}
+import org.slf4j.{LoggerFactory, Logger}
+import org.apache.lucene.analysis.tokenattributes.TypeAttribute
 
 final case class TermPositionsListEntry(term: String, position: Int)
 final case class DocumentTermInfo(docID: Int, termCounts: TesseraeCompareHandler.TermCountMap,
                                   termPositions: TesseraeCompareHandler.TermPositionsList)
 final case class QueryParameters(qParamName: String, searchFieldParamName: String, fieldListParamName: String)
-final case class QueryInfo(termInfo: TesseraeCompareHandler.QueryTermInfo, fieldList: List[String], searcher: (Int, Int) => DocList, openTokenStream: (Int) => TokenStream)
+final case class QueryInfo(termInfo: TesseraeCompareHandler.QueryTermInfo, fieldList: List[String], searcher: (Int, Int) => DocList)
 final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
 final case class DistanceParameters(pair: DocumentPair, commonTerms: Set[String], source: QueryInfo, target: QueryInfo)
 final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Double, distance: Int)
@@ -132,7 +132,7 @@ trait DistanceMixin {
   protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermPositionsList = {
     val terms = info.termInfo(id).termPositions
     val filtered = if (filter) { filterPositions(terms) } else { terms }
-    filtered.sortWith { (a, b) => a.position < b.position }
+    terms.sortWith { (a, b) => a.position < b.position }
   }
 
   protected def distanceBetween(p0: TermPositionsListEntry, p1: TermPositionsListEntry) = {
@@ -222,6 +222,10 @@ class SpanSourceDistance extends SpanDistance {
     internalDistance(params.pair.sourceDoc, params.source)
 }
 
+object TesseraeScoring {
+
+}
+
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
   import TesseraeCompareHandler._
@@ -237,7 +241,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val returnFields = new SolrReturnFields(req)
     rsp.setReturnFields(returnFields)
 
-    rsp.add("params", req.getParams.toNamedList)
+    rsp.add("params", req.getParams().toNamedList())
 
     var flags = 0
     if (returnFields.wantsScore) {
@@ -366,16 +370,16 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       val params = DistanceParameters(pair, terms, source, target)
       metric.calculateDistance(params).map { distance =>
         if (distance <= maxDistance || maxDistance <= 0) {
+
+          logger.info("Distance is " + distance)
+
           var score = 0.0
           terms.foreach { term =>
             val sourceCount = source.termInfo(pair.sourceDoc).termCounts(term)
             val targetCount = target.termInfo(pair.targetDoc).termCounts(term)
-
-            val sFreq = 1.0 / sourceCount.toDouble
-            val sMult = calculateNgramMultiplier(source, pair.sourceDoc)
-            val tFreq = 1.0 / targetCount.toDouble
-            val tMult = calculateNgramMultiplier(target, pair.targetDoc)
-            score += (sFreq * sMult) + (tFreq * tMult)
+            val sFreq = ((1.0) / (sourceCount.toDouble))
+            val tFreq = ((1.0) / (targetCount.toDouble))
+            score += sFreq + tFreq
           }
 
           val finalScore = math.log(score / distance.toDouble)
@@ -387,21 +391,6 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Return the results sorted by score (descending)
     results.sortWith { (a, b) => a.score > b.score }
-  }
-
-  private def calculateNgramMultiplier(qi: QueryInfo, document: Int): Double = {
-    val stream = qi.openTokenStream(document)
-    if (stream != null) {
-      try {
-        // TODO: This
-
-        1.0
-      } finally {
-        stream.close()
-      }
-    } else {
-      1.0
-    }
   }
 
   private def findDocumentPairs(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]]): Map[DocumentPair, Set[String]] = {
@@ -434,7 +423,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Make it immutable
     pairCounts.map { case (pair, terms) =>
-      (pair, terms.toSet)
+      ((pair, terms.toSet))
     }
   }
 
@@ -473,7 +462,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Make it immutable
     sourceTermMash.map { case (term, set) =>
-      (term, set.toSet)
+      ((term, set.toSet))
     }
   }
 
@@ -529,7 +518,6 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
     }
 
-    val analyzer = schema.getFieldType(searchField).getQueryAnalyzer
     val secondParam: java.util.List[org.apache.lucene.search.Query] = null
     val listAndSet = searcher.getDocListAndSet(query, secondParam, null, 0, 10)
     val dlit = listAndSet.docSet.iterator()
@@ -537,27 +525,20 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     logger.info("Using query '" + queryStr + "' found " + listAndSet.docSet.size + " documents")
 
     var termInfo: QueryTermInfo = Map.empty
+
     while (dlit.hasNext) {
       val docId = dlit.nextDoc()
       val vec = reader.getTermVector(docId, searchField)
+
       if (vec != null) {
         val dti = mapOneVector(reader, docId, vec.iterator(null), searchField)
         termInfo += docId -> dti
       }
     }
 
-    // I wonder...
-    // Maybe I don't even need the term vector
-    // Maybe I can get away with one pass using the token stream
-    // -> in which I can ALSO grab any ngram attributes
-
-    def getTokenStream(id: Int): TokenStream = {
-      val doc = reader.document(id)
-      doc.getField(searchField).tokenStream(analyzer)
-    }
-
     logger.info("Using query '" + queryStr + "' found " + termInfo.size + " actual results")
-    QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList, id => getTokenStream(id))
+
+    QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList)
   }
 
   private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {
@@ -572,9 +553,10 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     // as it is currently, this might pick up the noun, this might pick up the verb.
     var knownPositions: Set[Int] = Set.empty
 
-    while (text != null) {
+    while(text != null) {
       val term = text.utf8ToString
       val freq = termsEnum.totalTermFreq.toInt
+      var termType: Option[Attribute] = None
 
       dpEnum = termsEnum.docsAndPositions(null, dpEnum)
       if (dpEnum == null) {

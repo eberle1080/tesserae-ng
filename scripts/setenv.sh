@@ -1,1 +1,1 @@
-JAVA_OPTS="-Duser.language=en -Duser.country=US -Dsolr.solr.home=/home/tesserae/solr -Xdebug -Xrunjdwp:transport=dt_socket,address=9000,server=y,suspend=n -server -XX:+CMSClassUnloadingEnabled -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:+UseStringCache -XX:+OptimizeStringConcat -XX:+UseG1GC"
+JAVA_OPTS="-Duser.language=en -Duser.country=US -Dsolr.solr.home=/home/tesserae/solr"

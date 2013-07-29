@@ -27,7 +27,7 @@ class LatinStemmer {
   }
 
   def stemAsNoun(termBuffer: Array[Char], termLength: Int): String = {
-    val noun = String.valueOf(termBuffer, 0, termLength).toLowerCase
+    val noun = String.valueOf(termBuffer, 0, termLength).toLowerCase()
     if ((noun.endsWith("ibus") || noun.endsWith("arum") || noun.endsWith("erum") || noun.endsWith("orum") || noun.endsWith("ebus")) && noun.length() >= 6) {
       String.valueOf(termBuffer, 0, termLength - 4)
     } else if ((noun.endsWith("ius") || noun.endsWith("uum") || noun.endsWith("ium")) && noun.length() >= 5) {
@@ -45,7 +45,7 @@ class LatinStemmer {
   }
 
   def stemAsVerb(termBuffer: Array[Char], termLength: Int): String = {
-    val verb = String.valueOf(termBuffer, 0, termLength).toLowerCase
+    val verb = String.valueOf(termBuffer, 0, termLength).toLowerCase()
     if (verb.endsWith("iuntur") || verb.endsWith("erunt") || verb.endsWith("untur") || verb.endsWith("iunt") || verb.endsWith("unt")) {
       verbSuffixToI(termBuffer, termLength)
     } else if (verb.endsWith("beris") || verb.endsWith("bor") || verb.endsWith("bo")) {
@@ -67,7 +67,7 @@ class LatinStemmer {
   }
 
   def verbSuffixToI(termBuffer: Array[Char], termLength: Int): String = {
-    val verb = String.valueOf(termBuffer, 0, termLength).toLowerCase
+    val verb = String.valueOf(termBuffer, 0, termLength).toLowerCase()
     if (verb.endsWith("iuntur") && termLength >= 8) {
       String.valueOf(termBuffer, 0, termLength - 5)
     } else if ((verb.endsWith("erunt") || verb.endsWith("untur")) && termLength >= 7) {
@@ -84,7 +84,7 @@ class LatinStemmer {
   }
 
   def verbSuffixToBI(termBuffer: Array[Char], termLength: Int): String = {
-    val verb = String.valueOf(termBuffer, 0, termLength).toLowerCase
+    val verb = String.valueOf(termBuffer, 0, termLength).toLowerCase()
     if (verb.endsWith("beris") && termLength >= 7) {
       termBuffer(termLength - 4) = 'i'
       String.valueOf(termBuffer, 0, termLength - 3)
