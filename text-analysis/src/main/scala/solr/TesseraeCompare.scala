@@ -17,12 +17,16 @@ import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
 import org.apache.lucene.util.{Attribute, BytesRef}
 import org.slf4j.LoggerFactory
 import org.apache.lucene.analysis.{TokenStream, Analyzer}
+import org.apache.lucene.analysis.tokenattributes._
+import scala.collection.immutable.HashMap
 
-final case class TermPositionsListEntry(term: String, position: Int)
+final case class TermInfo(term: String, positionStart: Int, positionEnd: Int, termType: String)
 final case class DocumentTermInfo(docID: Int, termCounts: TesseraeCompareHandler.TermCountMap,
-                                  termPositions: TesseraeCompareHandler.TermPositionsList)
+                                  termPositions: TesseraeCompareHandler.TermInfoList,
+                                  ngramCounts: TesseraeCompareHandler.NGramFrequencyMap, totalNgrams: Int)
 final case class QueryParameters(qParamName: String, searchFieldParamName: String, fieldListParamName: String)
-final case class QueryInfo(termInfo: TesseraeCompareHandler.QueryTermInfo, fieldList: List[String], searcher: (Int, Int) => DocList, openTokenStream: (Int) => TokenStream)
+final case class QueryInfo(termInfo: TesseraeCompareHandler.QueryTermInfo, fieldList: List[String],
+                           searcher: (Int, Int) => DocList, ngramMultiplier: Double)
 final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
 final case class DistanceParameters(pair: DocumentPair, commonTerms: Set[String], source: QueryInfo, target: QueryInfo)
 final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Double, distance: Int)
@@ -34,10 +38,13 @@ object TesseraeCompareHandler {
   val SPLIT_REGEX = ",| ".r
 
   // Countains a list of term + position tuples
-  type TermPositionsList = List[TermPositionsListEntry]
+  type TermInfoList = List[TermInfo]
 
   // Maps term text -> count
   type TermCountMap = Map[String, Int]
+
+  // Maps ngram -> count
+  type NGramFrequencyMap = Map[String, Int]
 
   // Maps doc id -> DocumentTermInfo
   type QueryTermInfo = Map[Int, DocumentTermInfo]
@@ -87,7 +94,9 @@ trait Distance {
 
 // Some re-usable distance functions
 trait DistanceMixin {
-  import TesseraeCompareHandler.TermPositionsList
+  import TesseraeCompareHandler.TermInfoList
+
+  private lazy val logger = LoggerFactory.getLogger(getClass)
 
   protected def sortedFreq(id: Int, info: QueryInfo): List[(Int, String)] = {
     val terms = info.termInfo(id).termCounts
@@ -99,55 +108,67 @@ trait DistanceMixin {
     counts.sortWith { (a, b) => a._1 < b._1 }
   }
 
-  protected def filterPositions(tpl: TermPositionsList): TermPositionsList = {
-    var entriesMap: Map[Int, String] = Map.empty
+  protected def filterPositions(tpl: TermInfoList): TermInfoList = {
+    logger.info("filterPositions: tpl.length=" + tpl.length)
+
+    var entriesMap: Map[(Int, Int), (String, String)] = Map.empty
     tpl.foreach { entry =>
       val termLen = entry.term.length
-      entriesMap.get(entry.position) match {
+      entriesMap.get((entry.positionStart, entry.positionEnd)) match {
         case None =>
-          entriesMap += entry.position -> entry.term
+          logger.info("filterPositions: default case")
+          entriesMap += (entry.positionStart, entry.positionEnd) -> (entry.term, entry.termType)
         case Some(priorTerm) =>
-          val prLen = priorTerm.length
+          val prLen = priorTerm._1.length
           if (termLen > prLen) {
-            entriesMap += entry.position -> entry.term
+            logger.info("filterPositions: simple winner case")
+            entriesMap += (entry.positionStart, entry.positionEnd) -> (entry.term, entry.termType)
           } else if (termLen == prLen) {
             // choose alphabetically
-            if (entry.term.compareTo(priorTerm) > 0) {
-              entriesMap += entry.position -> entry.term
+            if (entry.term.compareTo(priorTerm._1) > 0) {
+              logger.info("filterPositions: complex winner case")
+              entriesMap += (entry.positionStart, entry.positionEnd) -> (entry.term, entry.termType)
+            } else {
+              logger.info("filterPositions: complex loser case")
             }
           } else {
             // leave the old one alone
+            logger.info("filterPositions: simple loser case")
           }
       }
     }
 
-    var list: TermPositionsList = Nil
-    entriesMap.foreach { case (pos, term) =>
-      list = TermPositionsListEntry(term, pos) :: list
+    var list: TermInfoList = Nil
+    entriesMap.foreach { case ((start, end), (term, tpe)) =>
+      list = TermInfo(term, start, end, tpe) :: list
     }
 
+    logger.info("filterPositions: list.length=" + list.length)
     list
   }
 
-  protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermPositionsList = {
+  protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermInfoList = {
     val terms = info.termInfo(id).termPositions
     val filtered = if (filter) { filterPositions(terms) } else { terms }
-    filtered.sortWith { (a, b) => a.position < b.position }
+    filtered.sortWith { (a, b) => a.positionStart < b.positionStart }
   }
 
-  protected def distanceBetween(p0: TermPositionsListEntry, p1: TermPositionsListEntry) = {
+  protected def distanceBetween(p0: TermInfo, p1: TermInfo) = {
     import math.abs
     // the perl one worries about words vs. non-words. I don't have this problem
     // because everything in the term vector is guaranteed to be a real word
-    abs(p1.position - p0.position) + 1
+    abs(p1.positionStart - p0.positionStart) + 1
   }
 }
 
 class FreqDistance extends Distance with DistanceMixin {
 
+  private lazy val logger = LoggerFactory.getLogger(getClass)
+
   protected def internalDistance(docID: Int, info: QueryInfo): Option[Int] = {
     val terms = sortedFreq(docID, info)
     if (terms.length < 2) {
+      logger.warn("Filtering doc " + docID + " because term length < 2")
       None
     } else {
       val positions = sortedPositions(docID, info)
@@ -159,6 +180,7 @@ class FreqDistance extends Distance with DistanceMixin {
       } catch {
         case e: NoSuchElementException =>
           // one of the "find" methods failed
+          logger.warn("Filtering doc " + docID + " because positions.find failed")
           return None
       }
 
@@ -279,6 +301,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val results = {
       val sortedResults = compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric)
+      logger.info("compare returned " + sortedResults.length + " result(s)")
       sortedResults.drop(start).take(rows)
     }
 
@@ -358,6 +381,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Get all document pairs with two or more terms in common
     val docPairs = findDocumentPairs(sourceMash, targetMash).filter { case (_, terms) => terms.size >= minCommonTerms }
+    logger.info("docPairs size is " + docPairs.size)
+
     val metric = getMetric(distanceMetric, maxDistance)
 
     // Distance and scoring
@@ -365,6 +390,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     docPairs.foreach { case (pair, terms) =>
       val params = DistanceParameters(pair, terms, source, target)
       metric.calculateDistance(params).map { distance =>
+        logger.info("Distance between " + pair.sourceDoc + " and " + pair.targetDoc + " is " + distance)
         if (distance <= maxDistance || maxDistance <= 0) {
           var score = 0.0
           terms.foreach { term =>
@@ -372,9 +398,9 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
             val targetCount = target.termInfo(pair.targetDoc).termCounts(term)
 
             val sFreq = 1.0 / sourceCount.toDouble
-            val sMult = calculateNgramMultiplier(source, pair.sourceDoc)
+            val sMult = source.ngramMultiplier
             val tFreq = 1.0 / targetCount.toDouble
-            val tMult = calculateNgramMultiplier(target, pair.targetDoc)
+            val tMult = target.ngramMultiplier
             score += (sFreq * sMult) + (tFreq * tMult)
           }
 
@@ -387,21 +413,6 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Return the results sorted by score (descending)
     results.sortWith { (a, b) => a.score > b.score }
-  }
-
-  private def calculateNgramMultiplier(qi: QueryInfo, document: Int): Double = {
-    val stream = qi.openTokenStream(document)
-    if (stream != null) {
-      try {
-        // TODO: This
-
-        1.0
-      } finally {
-        stream.close()
-      }
-    } else {
-      1.0
-    }
   }
 
   private def findDocumentPairs(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]]): Map[DocumentPair, Set[String]] = {
@@ -539,64 +550,62 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     var termInfo: QueryTermInfo = Map.empty
     while (dlit.hasNext) {
       val docId = dlit.nextDoc()
-      val vec = reader.getTermVector(docId, searchField)
-      if (vec != null) {
-        val dti = mapOneVector(reader, docId, vec.iterator(null), searchField)
-        termInfo += docId -> dti
+      val doc = reader.document(docId)
+      val tokStream = doc.getField(searchField).tokenStream(analyzer)
+      if (tokStream != null) {
+        try {
+          val dti = readStream(docId, tokStream)
+          if (dti != null) {
+            termInfo += docId -> dti
+          }
+        } finally {
+          tokStream.close()
+        }
+      } else {
+        logger.warn("token stream is null!")
       }
-    }
-
-    // I wonder...
-    // Maybe I don't even need the term vector
-    // Maybe I can get away with one pass using the token stream
-    // -> in which I can ALSO grab any ngram attributes
-
-    def getTokenStream(id: Int): TokenStream = {
-      val doc = reader.document(id)
-      doc.getField(searchField).tokenStream(analyzer)
     }
 
     logger.info("Using query '" + queryStr + "' found " + termInfo.size + " actual results")
-    QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList, id => getTokenStream(id))
+    QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList, 1.0)
   }
 
-  private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {
-    var text: BytesRef = termsEnum.next()
-    var dpEnum: DocsAndPositionsEnum = null
-    var positions: TermPositionsList = Nil
-    var counts: TermCountMap = Map.empty
+  private def readStream(docId: Int, tokenStream: TokenStream): DocumentTermInfo = {
+    tokenStream.reset()
+    val termAtt = tokenStream.getAttribute(classOf[CharTermAttribute])
+    val offsetAtt: OffsetAttribute = tokenStream.getAttribute(classOf[OffsetAttribute])
+    val typeAtt: TypeAttribute = tokenStream.getAttribute(classOf[TypeAttribute])
+    val keywordAttr: KeywordAttribute = tokenStream.getAttribute(classOf[KeywordAttribute])
+    //val ngramAttr: NGramAttribute = tokenStream.getAttribute(classOf[NGramAttribute])
+    val ngramSummaryAttr: NGramSummaryAttribute = tokenStream.getAttribute(classOf[NGramSummaryAttribute])
 
-    // TODO: Fix this. This right here is a damn shame. Basically here's the story:
-    // each position can have more than one term. In the latin analyzer, this strategy
-    // is used to store, say, a verb-stem and noun-stem of an ambiguous word.
-    // as it is currently, this might pick up the noun, this might pick up the verb.
-    var knownPositions: Set[Int] = Set.empty
+    var frequencies: TermCountMap = HashMap.empty
+    var positions: TermInfoList = Nil
+    var ngramFrequency: NGramFrequencyMap = HashMap.empty
+    var totalNGrams = 0
 
-    while (text != null) {
-      val term = text.utf8ToString
-      val freq = termsEnum.totalTermFreq.toInt
+    while (tokenStream.incrementToken()) {
+      if (!keywordAttr.isKeyword) {
+        val term = new String(termAtt.buffer())
+        val prevCount = frequencies.getOrElse(term, 0)
+        frequencies += term -> (prevCount + 1)
 
-      dpEnum = termsEnum.docsAndPositions(null, dpEnum)
-      if (dpEnum == null) {
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "termsEnum.docsAndPositions returned null")
-      }
+        val entry = TermInfo(term, offsetAtt.startOffset(), offsetAtt.endOffset(), typeAtt.`type`())
 
-      dpEnum.nextDoc()
-      for (i <- 0 until freq) {
-        val pos = dpEnum.nextPosition
-        if (!knownPositions.contains(pos)) {
-          val entry = TermPositionsListEntry(term, pos)
-          positions = entry :: positions
-          knownPositions += pos
-          val oldCount = counts.getOrElse(term, 0)
-          counts += term -> (oldCount + 1)
+        totalNGrams += ngramSummaryAttr.getTotalNGrams
+        ngramSummaryAttr.getNGramCounts.foreach { case (key, count) =>
+          ngramFrequency.get(key) match {
+            case None => ngramFrequency += key -> count
+            case Some(prev) => ngramFrequency += key -> (prev + count)
+          }
         }
-      }
 
-      text = termsEnum.next()
+        positions = entry :: positions
+      }
     }
 
-    DocumentTermInfo(docId, counts, positions)
+    tokenStream.end()
+    DocumentTermInfo(docId, frequencies, positions, ngramFrequency, totalNGrams)
   }
 
   def getDescription =
