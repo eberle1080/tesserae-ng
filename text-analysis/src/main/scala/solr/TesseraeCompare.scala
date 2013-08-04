@@ -14,213 +14,8 @@ import org.apache.solr.search._
 import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
 import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
-import org.apache.lucene.util.{Attribute, BytesRef}
-import org.slf4j.{LoggerFactory, Logger}
-import org.apache.lucene.analysis.tokenattributes.TypeAttribute
-
-final case class TermPositionsListEntry(term: String, position: Int)
-final case class DocumentTermInfo(docID: Int, termCounts: TesseraeCompareHandler.TermCountMap,
-                                  termPositions: TesseraeCompareHandler.TermPositionsList)
-final case class QueryParameters(qParamName: String, searchFieldParamName: String, fieldListParamName: String)
-final case class QueryInfo(termInfo: TesseraeCompareHandler.QueryTermInfo, fieldList: List[String], searcher: (Int, Int) => DocList)
-final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
-final case class DistanceParameters(pair: DocumentPair, commonTerms: Set[String], source: QueryInfo, target: QueryInfo)
-final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Double, distance: Int)
-
-object TesseraeCompareHandler {
-  val DEFAULT_MAX_DISTANCE = 0 // 0 = no max
-  val DEFAULT_MIN_COMMON_TERMS = 2 // can't be less than 2
-  val DEFAULT_HIGHLIGHT = false
-  val SPLIT_REGEX = ",| ".r
-
-  // Countains a list of term + position tuples
-  type TermPositionsList = List[TermPositionsListEntry]
-
-  // Maps term text -> count
-  type TermCountMap = Map[String, Int]
-
-  // Maps doc id -> DocumentTermInfo
-  type QueryTermInfo = Map[Int, DocumentTermInfo]
-
-  type TermList = java.util.LinkedList[String]
-  type DocFields = java.util.HashMap[String, AnyRef]
-  type TesseraeDoc = java.util.HashMap[String, AnyRef]
-  type TesseraeMatch = java.util.HashMap[String, AnyRef]
-  type TesseraeMatches = java.util.LinkedList[TesseraeMatch]
-}
-
-object DistanceMetrics extends Enumeration {
-  val FREQ, FREQ_TARGET, FREQ_SOURCE, SPAN, SPAN_TARGET, SPAN_SOURCE = Value
-  val DEFAULT_METRIC = FREQ
-
-  def apply(str: String): Option[Value] = {
-    if (str == null) {
-      return None
-    }
-    str.trim.toLowerCase match {
-      case "freq" => Some(FREQ)
-      case "freq_target" => Some(FREQ_TARGET)
-      case "freq_source" => Some(FREQ_SOURCE)
-      case "span" => Some(SPAN)
-      case "span_target" => Some(SPAN_TARGET)
-      case "span_source" => Some(SPAN_SOURCE)
-      case _ => None
-    }
-  }
-
-  def apply(metric: Value): Option[Distance] = {
-    metric match {
-      case FREQ => Some(new FreqDistance)
-      case FREQ_TARGET => Some(new FreqTargetDistance)
-      case FREQ_SOURCE => Some(new FreqSourceDistance)
-      case SPAN => Some(new SpanDistance)
-      case SPAN_TARGET => Some(new SpanTargetDistance)
-      case SPAN_SOURCE => Some(new SpanSourceDistance)
-      case _ => None
-    }
-  }
-}
-
-trait Distance {
-  def calculateDistance(params: DistanceParameters): Option[Int]
-}
-
-// Some re-usable distance functions
-trait DistanceMixin {
-  import TesseraeCompareHandler.TermPositionsList
-
-  protected def sortedFreq(id: Int, info: QueryInfo): List[(Int, String)] = {
-    val terms = info.termInfo(id).termCounts
-    var counts: List[(Int, String)] = Nil
-    terms.foreach { case (term, freq) =>
-      counts = (freq, term) :: counts
-    }
-
-    counts.sortWith { (a, b) => a._1 < b._1 }
-  }
-
-  protected def filterPositions(tpl: TermPositionsList): TermPositionsList = {
-    var entriesMap: Map[Int, String] = Map.empty
-    tpl.foreach { entry =>
-      val termLen = entry.term.length
-      entriesMap.get(entry.position) match {
-        case None =>
-          entriesMap += entry.position -> entry.term
-        case Some(priorTerm) =>
-          val prLen = priorTerm.length
-          if (termLen > prLen) {
-            entriesMap += entry.position -> entry.term
-          } else if (termLen == prLen) {
-            // choose alphabetically
-            if (entry.term.compareTo(priorTerm) > 0) {
-              entriesMap += entry.position -> entry.term
-            }
-          } else {
-            // leave the old one alone
-          }
-      }
-    }
-
-    var list: TermPositionsList = Nil
-    entriesMap.foreach { case (pos, term) =>
-      list = TermPositionsListEntry(term, pos) :: list
-    }
-
-    list
-  }
-
-  protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermPositionsList = {
-    val terms = info.termInfo(id).termPositions
-    val filtered = if (filter) { filterPositions(terms) } else { terms }
-    terms.sortWith { (a, b) => a.position < b.position }
-  }
-
-  protected def distanceBetween(p0: TermPositionsListEntry, p1: TermPositionsListEntry) = {
-    import math.abs
-    // the perl one worries about words vs. non-words. I don't have this problem
-    // because everything in the term vector is guaranteed to be a real word
-    abs(p1.position - p0.position) + 1
-  }
-}
-
-class FreqDistance extends Distance with DistanceMixin {
-
-  protected def internalDistance(docID: Int, info: QueryInfo): Option[Int] = {
-    val terms = sortedFreq(docID, info)
-    if (terms.length < 2) {
-      None
-    } else {
-      val positions = sortedPositions(docID, info)
-      val (tt0, tt1) = (terms(0)._2, terms(1)._2)
-      val (t0, t1) = try {
-        val _t0 = positions.find(tp => tp.term == tt0).get
-        val _t1 = positions.find(tp => tp.term == tt1).get
-        (_t0, _t1)
-      } catch {
-        case e: NoSuchElementException =>
-          // one of the "find" methods failed
-          return None
-      }
-
-      Some(distanceBetween(t0, t1))
-    }
-  }
-
-  def calculateDistance(params: DistanceParameters): Option[Int] = {
-    internalDistance(params.pair.sourceDoc, params.source) match {
-      case None => None
-      case Some(sourceDist) =>
-        internalDistance(params.pair.targetDoc, params.target) match {
-          case None => None
-          case Some(targetDist) => Some(sourceDist + targetDist)
-        }
-    }
-  }
-}
-
-class FreqTargetDistance extends FreqDistance {
-  override def calculateDistance(params: DistanceParameters) =
-    internalDistance(params.pair.targetDoc, params.target)
-}
-
-class FreqSourceDistance extends FreqDistance {
-  override def calculateDistance(params: DistanceParameters) =
-    internalDistance(params.pair.sourceDoc, params.source)
-}
-
-class SpanDistance extends Distance with DistanceMixin {
-  protected def internalDistance(docID: Int, info: QueryInfo): Option[Int] = {
-    val positions = sortedPositions(docID, info)
-    if (positions.length < 2) {
-      None
-    } else {
-      val first = positions.head
-      val last = positions.takeRight(1).head
-      Some(distanceBetween(first, last))
-    }
-  }
-
-  def calculateDistance(params: DistanceParameters) = {
-    internalDistance(params.pair.sourceDoc, params.source) match {
-      case None => None
-      case Some(sourceDist) =>
-        internalDistance(params.pair.targetDoc, params.target) match {
-          case None => None
-          case Some(targetDist) => Some(sourceDist + targetDist)
-        }
-    }
-  }
-}
-
-class SpanTargetDistance extends SpanDistance {
-  override def calculateDistance(params: DistanceParameters) =
-    internalDistance(params.pair.targetDoc, params.target)
-}
-
-class SpanSourceDistance extends SpanDistance {
-  override def calculateDistance(params: DistanceParameters) =
-    internalDistance(params.pair.sourceDoc, params.source)
-}
+import org.apache.lucene.util.BytesRef
+import org.slf4j.LoggerFactory
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -237,7 +32,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val returnFields = new SolrReturnFields(req)
     rsp.setReturnFields(returnFields)
 
-    rsp.add("params", req.getParams().toNamedList())
+    rsp.add("params", req.getParams.toNamedList)
 
     var flags = 0
     if (returnFields.wantsScore) {
@@ -263,7 +58,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
 
     val includeSourceMatch = params.getBool(TesseraeCompareParams.SOURCE_INCLUDE, false)
-    val includeHighlightInfo = params.getBool(TesseraeCompareParams.HIGHLIGHT, DEFAULT_HIGHLIGHT)
+    //val includeHighlightInfo = params.getBool(TesseraeCompareParams.HIGHLIGHT, DEFAULT_HIGHLIGHT)
 
     val sourceParams = QueryParameters(TesseraeCompareParams.SQ, TesseraeCompareParams.SF, TesseraeCompareParams.SFL)
     val sourceInfo = gatherInfo(req, rsp, sourceParams)
@@ -473,7 +268,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val parser = QParser.getParser(queryStr, defType, req)
     val query = parser.getQuery
-    val sorter = parser.getSort(true)
+    //val sorter = parser.getSort(true)
     val searcher = req.getSearcher
     val reader = searcher.getIndexReader
 
@@ -552,7 +347,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     while(text != null) {
       val term = text.utf8ToString
       val freq = termsEnum.totalTermFreq.toInt
-      var termType: Option[Attribute] = None
+      //var termType: Option[Attribute] = None
 
       dpEnum = termsEnum.docsAndPositions(null, dpEnum)
       if (dpEnum == null) {
@@ -584,46 +379,24 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     "$URL: https://raw.github.com/eberle1080/tesserae-ng/master/text-analysis/src/main/scala/solr/TesseraeCompare.scala $"
 }
 
-object TesseraeCompareParams {
-  val TESS = "tess"
-  val PREFIX = TESS + "."
+object TesseraeCompareHandler {
+  val DEFAULT_MAX_DISTANCE = 0 // 0 = no max
+  val DEFAULT_MIN_COMMON_TERMS = 2 // can't be less than 2
+  val DEFAULT_HIGHLIGHT = false
+  val SPLIT_REGEX = ",| ".r
 
-  // source query
-  val SQ = PREFIX + "sq"
+  // Countains a list of term + position tuples
+  type TermPositionsList = List[TermPositionsListEntry]
 
-  // source text field
-  val SF = PREFIX + "sf"
+  // Maps term text -> count
+  type TermCountMap = Map[String, Int]
 
-  // source field list
-  val SFL = PREFIX + "sfl"
+  // Maps doc id -> DocumentTermInfo
+  type QueryTermInfo = Map[Int, DocumentTermInfo]
 
-  // target query
-  val TQ = PREFIX + "tq"
-
-  // target text field
-  val TF = PREFIX + "tf"
-
-  // target field list
-  val TFL = PREFIX + "tfl"
-
-  // max distance
-  val MD = PREFIX + "md"
-
-  // minimum common terms
-  val MCT = PREFIX + "mct"
-
-  // distance metric
-  val METRIC = PREFIX + "metric"
-
-  // include the source matches?
-  val SOURCE_INCLUDE = PREFIX + "source.include"
-
-  // how many source docs to include
-  val SOURCE_COUNT = PREFIX + "source.count"
-
-  // an offset into the source list
-  val SOURCE_OFFSET = PREFIX + "source.offset"
-
-  // include highlight info?
-  val HIGHLIGHT = PREFIX + "highlight"
+  type TermList = java.util.LinkedList[String]
+  type DocFields = java.util.HashMap[String, AnyRef]
+  type TesseraeDoc = java.util.HashMap[String, AnyRef]
+  type TesseraeMatch = java.util.HashMap[String, AnyRef]
+  type TesseraeMatches = java.util.LinkedList[TesseraeMatch]
 }
