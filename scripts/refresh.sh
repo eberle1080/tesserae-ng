@@ -137,6 +137,13 @@ supervisorctl start tesserae-ng
 
 echo "All done."
 
+echo
+echo ">>> NOTICE <<<"
+echo "The Solr index was NOT rebuilt. This is intentional. If you want to rebuild the"
+echo "Solr index, please run './manage.py rebuild_index'"
+echo ">>> NOTICE <<<"
+echo
+
 echo '*******************************************************************************'
 echo '* End tesserae-ng refresh                                                     *'
 echo '*******************************************************************************'

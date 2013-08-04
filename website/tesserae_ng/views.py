@@ -76,13 +76,24 @@ def logout(request):
     django_logout(request)
     return index(request)
 
+@require_GET
 def search(request, language, level):
     """
     The core search entry point
     """
 
     import core_search
-    return core_search.search(request, language, level)
+    return core_search.show_search(request, language, level)
+
+@csrf_exempt
+@require_GET
+def do_search(request, language, level):
+    """
+    The user wants to execute a search
+    """
+
+    import core_search
+    return core_search.do_search(request, language, level)
 
 @require_GET
 def upload(request):

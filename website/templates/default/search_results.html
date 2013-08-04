@@ -1,0 +1,30 @@
+{% extends "main.html" %}
+{% load form_goodies %}
+{% block title %}Tesserae NG - Basic {{ language|capfirst }} Search Results{% endblock %}
+{% block nav_lbs_class %}active{% endblock %}
+{% block lbs_link %}#{% endblock %}
+{% block container %}
+  <div class="hero-unit">
+    <h2>Basic {{ language|capfirst }} Search Results</h2>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Score</th>
+          <th>Distance</th>
+          <th>Source</th>
+          <th>Target</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for m in matches %}
+        <tr>
+          <td>{{ m }}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

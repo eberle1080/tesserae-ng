@@ -1,5 +1,6 @@
 import StringIO
 import re
+import logging
 
 from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET, require_POST
@@ -8,23 +9,69 @@ from website.tesserae_ng.models import SourceText, SourceTextSentence
 from website.tesserae_ng.forms import SimpleSearchForm
 import reversion
 
-def search(request, language, level):
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
+
+
+def show_search(request, language, level):
     """
     The core search entry point
     """
 
     args = {'language': language, 'user': request.user,
             'authenticated': request.user.is_authenticated(),
-            'form': SimpleSearchForm() }
+            'form': SimpleSearchForm()}
 
-    if request.method == 'GET':
-        if language in ('latin', 'greek', 'english'):
-            if language == 'latin' and level == 'basic':
-                return _render(request, 'basic_search.html', args)
-            elif level == 'advanced':
-                return _render(request, 'advanced_search.html', args)
+    if language in ('latin', 'greek', 'english'):
+        if language == 'latin' and level == 'basic':
+            return _render(request, 'basic_search.html', args)
+        elif level == 'advanced':
+            return _render(request, 'advanced_search.html', args)
 
     raise Http404()
+
+
+def do_search(request, language, level):
+    """
+    A search form was submitted
+    """
+
+    if level == 'basic':
+        form = SimpleSearchForm(request.GET)
+        if form.is_valid():
+            return _search_basic(request, form, language)
+        else:
+            args = {'language': language, 'user': request.user,
+                    'authenticated': request.user.is_authenticated(),
+                    'form': form }
+            return _render(request, 'basic_search.html', args)
+
+    raise Http404()
+
+
+def _search_basic(request, form, language):
+    """
+    The user wants to do a basic search
+    """
+
+    from custom_solr import basic_search
+    source = form.cleaned_data['source']
+    target = form.cleaned_data['target']
+    results = basic_search(source, target, language)
+
+    if results.has_key('error'):
+        raise RuntimeError(results['error']['msg'])
+
+    qtime = results['responseHeader']['QTime']
+    matches = [ m for m in results['matches'] if m != "match" ]
+    args = { 'language': language, 'user': request.user,
+             'authenticated': request.user.is_authenticated(),
+             'source': source, 'target': target,
+             'qtime': qtime, 'matches': matches }
+
+    return _render(request, 'search_results.html', args)
+
 
 def create_source_text_from_form(form):
     """
@@ -43,6 +90,7 @@ def create_source_text_from_form(form):
             model_args[field] = form.cleaned_data[field]
 
     return SourceText(**model_args)
+
 
 def source_text_from_form(form):
     """
@@ -67,6 +115,7 @@ def source_text_from_form(form):
 
     return source_text
 
+
 def volume_from_form(source_text, form, full_text):
     """
     Get the SourceTextVolume model given input data from a form.
@@ -81,6 +130,7 @@ def volume_from_form(source_text, form, full_text):
         volume=form.cleaned_data['volume'],
         text=full_text
     )
+
 
 def parse_text(request):
     """
@@ -158,6 +208,7 @@ def parse_text(request):
                     current_sentence = (current_sentence[0] + ' ' + part, current_sentence[1], end)
 
     return (full_text, sentences)
+
 
 def submit(request, form):
     """

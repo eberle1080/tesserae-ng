@@ -6,8 +6,7 @@
 {% block container %}
   <div class="hero-unit">
     <h2>Basic {{ language|capfirst }} Search</h2>
-    <form class="form-horizontal" action="/search/{{ language }}/basic" method="post" enctype="multipart/form-data">
-      {% csrf_token %}
+    <form class="form-horizontal" action="/search/{{ language }}/basic/search" method="get">
 {% for hidden in form.hidden_fields %}
       {{ hidden }}
 {% endfor %}
