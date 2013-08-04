@@ -42,11 +42,11 @@ object TesseraeCompareHandler {
   // Maps doc id -> DocumentTermInfo
   type QueryTermInfo = Map[Int, DocumentTermInfo]
 
-  type TermList = NamedList[String]
-  type DocFields = NamedList[AnyRef]
-  type TesseraeDoc = NamedList[AnyRef]
-  type TesseraeMatch = NamedList[AnyRef]
-  type TesseraeMatches = NamedList[TesseraeMatch]
+  type TermList = java.util.LinkedList[String]
+  type DocFields = java.util.HashMap[String, AnyRef]
+  type TesseraeDoc = java.util.HashMap[String, AnyRef]
+  type TesseraeMatch = java.util.HashMap[String, AnyRef]
+  type TesseraeMatches = java.util.LinkedList[TesseraeMatch]
 }
 
 object DistanceMetrics extends Enumeration {
@@ -299,7 +299,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
         val fieldValue = doc.get(fieldName)
         if (fieldValue != null) {
           found += 1
-          populate.add(fieldName, fieldValue)
+          populate.put(fieldName, fieldValue)
         }
       }
 
@@ -309,33 +309,33 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val matches = new TesseraeMatches
     results.foreach { result =>
       val m = new TesseraeMatch
-      m.add("score", new java.lang.Double(result.score))
-      m.add("distance", new java.lang.Double(result.distance))
+      m.put("score", new java.lang.Double(result.score))
+      m.put("distance", new java.lang.Double(result.distance))
 
       val terms = new TermList
       result.commonTerms.toList.sorted.foreach { term =>
-        terms.add("term", term)
+        terms.add(term)
       }
 
-      m.add("terms", terms)
+      m.put("terms", terms)
 
       val sdoc = new TesseraeDoc
       val tdoc = new TesseraeDoc
 
       val sourceFields = new DocFields
       if (processResult(result, sourceIfTrue=true, sourceFields) > 0) {
-        sdoc.add("fields", sourceFields)
+        sdoc.put("fields", sourceFields)
       }
 
       val targetFields = new DocFields
       if (processResult(result, sourceIfTrue=false, targetFields) > 0) {
-        tdoc.add("fields", targetFields)
+        tdoc.put("fields", targetFields)
       }
 
-      m.add("source", sdoc)
-      m.add("target", tdoc)
+      m.put("source", sdoc)
+      m.put("target", tdoc)
 
-      matches.add("match", m)
+      matches.add(m)
     }
 
     rsp.add("matches", matches)

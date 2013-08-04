@@ -64,7 +64,7 @@ def _search_basic(request, form, language):
         raise RuntimeError(results['error']['msg'])
 
     qtime = results['responseHeader']['QTime']
-    matches = [ m for m in results['matches'] if m != "match" ]
+    matches = results['matches']
     args = { 'language': language, 'user': request.user,
              'authenticated': request.user.is_authenticated(),
              'source': source, 'target': target,

@@ -1,11 +1,13 @@
 {% extends "main.html" %}
 {% load form_goodies %}
 {% block title %}Tesserae NG - Basic {{ language|capfirst }} Search Results{% endblock %}
-{% block nav_lbs_class %}active{% endblock %}
-{% block lbs_link %}#{% endblock %}
 {% block container %}
   <div class="hero-unit">
     <h2>Basic {{ language|capfirst }} Search Results</h2>
+    <h5><strong>Source:</strong> "{{ source.source.title }}" ({{ source.volume }}) by {{ source.source.author }}</h5>
+    <h5><strong>Target:</strong> "{{ target.source.title }}" ({{ target.volume }}) by {{ target.source.author }}</h5>
+    <h5><strong>Query time:</strong> {{ qtime }} ms</h5>
+
     <table class="table table-striped">
       <thead>
         <tr>
@@ -13,15 +15,17 @@
           <th>Distance</th>
           <th>Source</th>
           <th>Target</th>
+          <th>Common Terms</th>
         </tr>
       </thead>
       <tbody>
       {% for m in matches %}
         <tr>
-          <td>{{ m }}</td>
-          <td></td>
-          <td></td>
-          <td></td>
+          <td>{{ m.score }}</td>
+          <td>{{ m.distance }}</td>
+          <td>{{ m.source.fields.text }}</td>
+          <td>{{ m.target.fields.text }}</td>
+          <td>{{ m.terms|join:", " }}</td>
         </tr>
       {% endfor %}
       </tbody>
