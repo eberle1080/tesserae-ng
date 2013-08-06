@@ -13,9 +13,10 @@ import org.apache.solr.common.util.NamedList
 import org.apache.solr.search._
 import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
-import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
+import org.apache.lucene.index.{Terms, DocsAndPositionsEnum, TermsEnum, IndexReader}
 import org.apache.lucene.util.BytesRef
 import org.slf4j.LoggerFactory
+import GenericWorker.makeTraverseableParallel
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -25,6 +26,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
   override def init(args: NamedList[_]) {
     super.init(args)
+    logger.info("Initialized TesseraeCompareHandler")
   }
 
   def handleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
@@ -58,19 +60,20 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
 
     val includeSourceMatch = params.getBool(TesseraeCompareParams.SOURCE_INCLUDE, false)
-    //val includeHighlightInfo = params.getBool(TesseraeCompareParams.HIGHLIGHT, DEFAULT_HIGHLIGHT)
 
-    val sourceParams = QueryParameters(TesseraeCompareParams.SQ, TesseraeCompareParams.SF, TesseraeCompareParams.SFL)
-    val sourceInfo = gatherInfo(req, rsp, sourceParams)
+    val (sourceInfo, targetInfo) = {
+      val info = List(TesseraeCompareParams.SOURCE_PARAMS, TesseraeCompareParams.TARGET_PARAMS).parallelMap { params =>
+        gatherInfo(req, rsp, params)
+      }
+
+      (info(0), info(1))
+    }
 
     if (includeSourceMatch) {
       val sourceCount = params.getInt(TesseraeCompareParams.SOURCE_COUNT, 10)
       val sourceOffset = params.getInt(TesseraeCompareParams.SOURCE_OFFSET, 0)
       rsp.add("source-matches", sourceInfo.searcher(sourceOffset, sourceCount))
     }
-
-    val targetParams = QueryParameters(TesseraeCompareParams.TQ, TesseraeCompareParams.TF, TesseraeCompareParams.TFL)
-    val targetInfo = gatherInfo(req, rsp, targetParams)
 
     val results = {
       val sortedResults = compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric)
@@ -162,7 +165,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       metric.calculateDistance(params).map { distance =>
         if (distance <= maxDistance || maxDistance <= 0) {
 
-          logger.info("Distance is " + distance)
+          //logger.info("Distance is " + distance)
 
           var score = 0.0
           terms.foreach { term =>
@@ -316,15 +319,21 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     logger.info("Using query '" + queryStr + "' found " + listAndSet.docSet.size + " documents")
 
     var termInfo: QueryTermInfo = Map.empty
+    var temporary: List[(Int, Terms)] = Nil
 
     while (dlit.hasNext) {
       val docId = dlit.nextDoc()
       val vec = reader.getTermVector(docId, searchField)
-
       if (vec != null) {
-        val dti = mapOneVector(reader, docId, vec.iterator(null), searchField)
-        termInfo += docId -> dti
+        temporary = temporary :+ (docId, vec)
       }
+    }
+
+    temporary.parallelMap { case (docId, vec) =>
+      val result = mapOneVector(reader, docId, vec.iterator(null), searchField)
+      (docId, result)
+    }.foreach { case (docId, result) =>
+      termInfo += result.docID -> result
     }
 
     logger.info("Using query '" + queryStr + "' found " + termInfo.size + " actual results")
@@ -377,6 +386,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
   def getSource =
     "$URL: https://raw.github.com/eberle1080/tesserae-ng/master/text-analysis/src/main/scala/solr/TesseraeCompare.scala $"
+
+
 }
 
 object TesseraeCompareHandler {
