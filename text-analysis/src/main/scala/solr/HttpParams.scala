@@ -42,7 +42,4 @@ object TesseraeCompareParams {
 
   // include highlight info?
   val HIGHLIGHT = PREFIX + "highlight"
-
-  val SOURCE_PARAMS = QueryParameters(SQ, SF, SFL)
-  val TARGET_PARAMS = QueryParameters(TQ, TF, TFL)
 }
