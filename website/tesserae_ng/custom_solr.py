@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 COMPARE_URL='{0}/compare'
 
-def basic_search(source, target, language):
+def basic_search(source, target, language, start=0, rows=10):
 
     if language != 'latin':
         raise Exception('Only latin is supported for now. Sorry.')
@@ -27,11 +27,13 @@ def basic_search(source, target, language):
         'tess.sfl': 'volume,author,text,title',
         'tess.tq': 'volume_id:{0}'.format(target.id),
         'tess.tf': 'text',
-        'tess.tfl': 'volume,author,text,title'
+        'tess.tfl': 'volume,author,text,title',
+        'start': str(start),
+        'rows': str(rows)
     }
 
     response = requests.get(COMPARE_URL.format(solr_url), params=get_params)
     response.raise_for_status()
 
-    response_map = eval(str(response.text))
-    return response_map
+    # This couldn't possibly be abused... cough
+    return eval(str(response.text))

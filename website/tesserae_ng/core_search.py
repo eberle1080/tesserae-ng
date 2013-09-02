@@ -49,6 +49,41 @@ def do_search(request, language, level):
 
     raise Http404()
 
+def _window_pages(page_info, maximum_pages):
+    if len(page_info) == 0:
+        return None, None, page_info 
+    if len(page_info) <= maximum_pages:
+        return page_info[0], page_info[-1], page_info
+
+    from collections import deque
+    d = deque()
+    active = None
+    appendsSinceActive = 0
+    half = maximum_pages // 2
+
+    for pi in page_info:
+        if len(d) >= maximum_pages:
+            d.popleft()
+        d.append(pi)
+
+        if pi['active']:
+            active = pi
+        else:
+            if active is not None:
+                appendsSinceActive += 1
+
+        if len(d) >= maximum_pages and appendsSinceActive >= half:
+            break
+
+    results = []
+    first = True
+    for pi in d:
+        not_first = not first
+        first = False
+        pi['not_first'] = not_first
+        results.append(pi)
+
+    return page_info[0], page_info[-1], results
 
 def _search_basic(request, form, language):
     """
@@ -58,7 +93,10 @@ def _search_basic(request, form, language):
     from custom_solr import basic_search
     source = form.cleaned_data['source']
     target = form.cleaned_data['target']
-    results = basic_search(source, target, language)
+    initial_offset = form.cleaned_data['start']
+    rows_per_page = form.cleaned_data['rows']
+
+    results = basic_search(source, target, language, start=initial_offset, rows=rows_per_page)
 
     if results.has_key('error'):
         raise RuntimeError(results['error']['msg'])
@@ -69,12 +107,55 @@ def _search_basic(request, form, language):
     matchStart = results['matchOffset'] + 1
     matchEnd = results['matchOffset'] + results['matchCount']
 
+    myFirstIndex = results['matchOffset']
+    myLastIndex = results['matchOffset'] + results['matchCount'] - 1
+
+    def isThisPage(beginMatchIndex, endMatchIndex):
+        if beginMatchIndex >= myFirstIndex and endMatchIndex <= myLastIndex:
+            return True
+        return False
+
+    indicesRemaining = matchTotal
+    currentStartIndex = None
+
+    pageInfo = []
+    pageCounter = 0
+    first = True
+
+    while indicesRemaining > 0:
+        if currentStartIndex is None:
+            currentStartIndex = 0
+        else:
+            currentStartIndex += rows_per_page
+        if indicesRemaining >= rows_per_page:
+            currentEndIndex = currentStartIndex + rows_per_page - 1
+        else:
+            currentEndIndex = currentStartIndex + indicesRemaining - 1
+        collected = currentEndIndex - currentStartIndex + 1
+        indicesRemaining -= collected
+        currentPageCounter = pageCounter
+        pageCounter += 1
+
+        href = '/search/' + language + '/basic/search?start=' + \
+               str(currentStartIndex) + '&rows=' + str(rows_per_page) + \
+               '&source=' + str(source.id) + '&target=' + str(target.id)
+
+        page = {'num': pageCounter, 'start': currentStartIndex,
+                'active': isThisPage(currentStartIndex, currentEndIndex),
+                'not_first': not first, 'href': href}
+
+        pageInfo.append(page)
+        first = False
+
+    firstPage, lastPage, windowedPages = _window_pages(pageInfo, 10)
+
     args = { 'language': language, 'user': request.user,
              'authenticated': request.user.is_authenticated(),
              'source': source, 'target': target,
              'qtime': qtime, 'matches': matches,
              'matchTotal': matchTotal, 'matchStart': matchStart,
-             'matchEnd': matchEnd }
+             'matchEnd': matchEnd, 'pageInfo': windowedPages,
+             'firstPage': firstPage, 'lastPage': lastPage }
 
     return _render(request, 'search_results.html', args)
 

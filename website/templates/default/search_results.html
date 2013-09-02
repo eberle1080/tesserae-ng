@@ -32,5 +32,30 @@
       {% endfor %}
       </tbody>
     </table>
+
+    <p class="text-center">
+      {% if firstPage %}
+      {% if firstPage.active %}
+      {% else %}
+      <a href="{{ firstPage.href }}">&laquo;</a>
+      {% endif %}
+      {% endif %}
+
+      {% for page in pageInfo %}
+      {% if page.not_first %}|{% endif %}
+      {% if page.active %}
+      <strong>{{ page.num }}</strong>
+      {% else %}
+      <a href="{{ page.href }}">{{ page.num }}</a>
+      {% endif %}
+      {% endfor %}
+
+      {% if lastPage %}
+      {% if lastPage.active %}
+      {% else %}
+      <a href="{{ lastPage.href }}">&raquo;</a>
+      {% endif %}
+      {% endif %}
+    </p>
   </div>
 {% endblock %}

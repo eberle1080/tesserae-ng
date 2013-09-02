@@ -187,7 +187,6 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       val params = DistanceParameters(pair, terms, source, target)
       metric.calculateDistance(params).map { distance =>
         if (distance <= maxDistance || maxDistance <= 0) {
-
           var score = 0.0
           terms.foreach { term =>
             val sourceTermFrequency = sourceCounts.getOrElse(term, 0).toDouble / sourceWordCount
