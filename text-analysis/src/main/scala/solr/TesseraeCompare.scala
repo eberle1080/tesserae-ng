@@ -87,10 +87,11 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val sourceInfo = gatherInfoResults(0)
     val targetInfo = gatherInfoResults(1)
 
-    val results = {
+    val (results, totalResultCount) = {
       // The bulk of the work happens here
       val sortedResults = compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric)
-      sortedResults.drop(start).take(rows)
+      val total = sortedResults.length
+      (sortedResults.drop(start).take(rows), total)
     }
 
     val searcher = req.getSearcher
@@ -148,6 +149,10 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
       matches.add(m)
     }
+
+    rsp.add("matchTotal", totalResultCount)
+    rsp.add("matchCount", results.length)
+    rsp.add("matchOffset", start)
 
     rsp.add("matches", matches)
   }

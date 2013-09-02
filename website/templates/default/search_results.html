@@ -8,6 +8,7 @@
     <h5><strong>Source:</strong> "{{ source.source.title }}" ({{ source.volume }}) by {{ source.source.author }}</h5>
     <h5><strong>Target:</strong> "{{ target.source.title }}" ({{ target.volume }}) by {{ target.source.author }}</h5>
     <h5><strong>Query time:</strong> {{ qtime }} ms</h5>
+    <h5><strong>Found:</strong> {{ matchTotal }} match{{ matchTotal|pluralize:"es" }} (displaying {{ matchStart }} - {{matchEnd }})</h5>
 
     <table class="table table-striped">
       <thead>

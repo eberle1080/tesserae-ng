@@ -65,10 +65,16 @@ def _search_basic(request, form, language):
 
     qtime = results['responseHeader']['QTime']
     matches = results['matches']
+    matchTotal = results['matchTotal']
+    matchStart = results['matchOffset'] + 1
+    matchEnd = results['matchOffset'] + results['matchCount']
+
     args = { 'language': language, 'user': request.user,
              'authenticated': request.user.is_authenticated(),
              'source': source, 'target': target,
-             'qtime': qtime, 'matches': matches }
+             'qtime': qtime, 'matches': matches,
+             'matchTotal': matchTotal, 'matchStart': matchStart,
+             'matchEnd': matchEnd }
 
     return _render(request, 'search_results.html', args)
 
