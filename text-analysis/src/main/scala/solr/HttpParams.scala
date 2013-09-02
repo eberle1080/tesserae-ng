@@ -31,15 +31,6 @@ object TesseraeCompareParams {
   // distance metric
   val METRIC = PREFIX + "metric"
 
-  // include the source matches?
-  val SOURCE_INCLUDE = PREFIX + "source.include"
-
-  // how many source docs to include
-  val SOURCE_COUNT = PREFIX + "source.count"
-
-  // an offset into the source list
-  val SOURCE_OFFSET = PREFIX + "source.offset"
-
   // include highlight info?
   val HIGHLIGHT = PREFIX + "highlight"
 }

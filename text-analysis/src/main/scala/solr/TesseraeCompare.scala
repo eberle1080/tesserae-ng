@@ -13,18 +13,39 @@ import org.apache.solr.common.util.NamedList
 import org.apache.solr.search._
 import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
-import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
+import org.apache.lucene.index.{Terms, DocsAndPositionsEnum, TermsEnum, IndexReader}
 import org.apache.lucene.util.BytesRef
 import org.slf4j.LoggerFactory
+import collection.parallel.immutable.ParVector
+import collection.parallel.ForkJoinTaskSupport
+import scala.concurrent.forkjoin.ForkJoinPool
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
   import TesseraeCompareHandler._
 
   private lazy val logger = LoggerFactory.getLogger(getClass)
+  private val DEFAULT_MAX_THREADS =
+    Runtime.getRuntime.availableProcessors() + 1
+
+  private var maximumThreads = DEFAULT_MAX_THREADS
+  private var workerPool: ForkJoinPool = null
 
   override def init(args: NamedList[_]) {
     super.init(args)
+
+    val threadCount = args.get("threads")
+    maximumThreads = threadCount match {
+      case null => DEFAULT_MAX_THREADS
+      case str: String => str.toInt
+      case i: Int => i
+    }
+
+    if (workerPool != null) {
+      workerPool.shutdown()
+    }
+
+    workerPool = new ForkJoinPool(maximumThreads)
   }
 
   def handleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
@@ -57,22 +78,17 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
     }
 
-    val includeSourceMatch = params.getBool(TesseraeCompareParams.SOURCE_INCLUDE, false)
-    //val includeHighlightInfo = params.getBool(TesseraeCompareParams.HIGHLIGHT, DEFAULT_HIGHLIGHT)
-
     val sourceParams = QueryParameters(TesseraeCompareParams.SQ, TesseraeCompareParams.SF, TesseraeCompareParams.SFL)
-    val sourceInfo = gatherInfo(req, rsp, sourceParams)
-
-    if (includeSourceMatch) {
-      val sourceCount = params.getInt(TesseraeCompareParams.SOURCE_COUNT, 10)
-      val sourceOffset = params.getInt(TesseraeCompareParams.SOURCE_OFFSET, 0)
-      rsp.add("source-matches", sourceInfo.searcher(sourceOffset, sourceCount))
-    }
-
     val targetParams = QueryParameters(TesseraeCompareParams.TQ, TesseraeCompareParams.TF, TesseraeCompareParams.TFL)
-    val targetInfo = gatherInfo(req, rsp, targetParams)
+
+    val paramsVector = ParVector(sourceParams, targetParams)
+    paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
+    val gatherInfoResults = paramsVector.map(qp => gatherInfo(req, rsp, qp))
+    val sourceInfo = gatherInfoResults(0)
+    val targetInfo = gatherInfoResults(1)
 
     val results = {
+      // The bulk of the work happens here
       val sortedResults = compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric)
       sortedResults.drop(start).take(rows)
     }
@@ -147,30 +163,33 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   private def compare(source: QueryInfo, target: QueryInfo, maxDistance: Int,
                       minCommonTerms: Int, distanceMetric: DistanceMetrics.Value): List[CompareResult] = {
 
-    // A mash maps one term to a set of document ids
-    val sourceMash = buildMash(source)
-    val targetMash = buildMash(target)
+    // A mash maps one term to a set of document ids. Build them in parallel.
+    val parvector = ParVector(source, target)
+    parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
+    val mashResults = parvector.map(qi => (buildMash(qi), buildTermFrequencies(qi)))
+    val (sourceMash, (sourceCounts, swc)) = mashResults(0)
+    val (targetMash, (targetCounts, twc)) = mashResults(1)
 
     // Get all document pairs with two or more terms in common
     val docPairs = findDocumentPairs(sourceMash, targetMash).filter { case (_, terms) => terms.size >= minCommonTerms }
     val metric = getMetric(distanceMetric, maxDistance)
 
     // Distance and scoring
+    val sourceWordCount = swc.toDouble
+    val targetWordCount = twc.toDouble
     var results: List[CompareResult] = Nil
     docPairs.foreach { case (pair, terms) =>
       val params = DistanceParameters(pair, terms, source, target)
       metric.calculateDistance(params).map { distance =>
         if (distance <= maxDistance || maxDistance <= 0) {
 
-          logger.info("Distance is " + distance)
-
           var score = 0.0
           terms.foreach { term =>
-            val sourceCount = source.termInfo(pair.sourceDoc).termCounts(term)
-            val targetCount = target.termInfo(pair.targetDoc).termCounts(term)
-            val sFreq = 1.0 / sourceCount.toDouble
-            val tFreq = 1.0 / targetCount.toDouble
-            score += sFreq + tFreq
+            val sourceTermFrequency = sourceCounts.getOrElse(term, 0).toDouble / sourceWordCount
+            val targetTermFrequency = targetCounts.getOrElse(term, 0).toDouble / targetWordCount
+            val sourceScore = 1.0 / sourceTermFrequency
+            val targetScore = 1.0 / targetTermFrequency
+            score += sourceScore + targetScore
           }
 
           val finalScore = math.log(score / distance.toDouble)
@@ -182,6 +201,22 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Return the results sorted by score (descending)
     results.sortWith { (a, b) => a.score > b.score }
+  }
+
+  private def buildTermFrequencies(queryInfo: QueryInfo) = {
+    var termCounts: TermCountMap = Map.empty
+    var totalWords = 0
+
+    queryInfo.termInfo.foreach { case (docId, dti) =>
+      dti.termCounts.foreach { case (term, count) =>
+        totalWords += count
+        termCounts.get(term) match {
+          case None => termCounts += term -> count
+          case Some(lastCount) => termCounts += term -> (lastCount + count)
+        }
+      }
+    }
+    (termCounts, totalWords)
   }
 
   private def findDocumentPairs(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]]): Map[DocumentPair, Set[String]] = {
@@ -313,23 +348,36 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val listAndSet = searcher.getDocListAndSet(query, secondParam, null, 0, 10)
     val dlit = listAndSet.docSet.iterator()
 
-    logger.info("Using query '" + queryStr + "' found " + listAndSet.docSet.size + " documents")
-
     var termInfo: QueryTermInfo = Map.empty
 
+    var jobs: List[(Int, Terms)] = Nil
     while (dlit.hasNext) {
       val docId = dlit.nextDoc()
       val vec = reader.getTermVector(docId, searchField)
-
       if (vec != null) {
-        val dti = mapOneVector(reader, docId, vec.iterator(null), searchField)
-        termInfo += docId -> dti
+        jobs = jobs ::: List((docId, vec))
       }
     }
 
-    logger.info("Using query '" + queryStr + "' found " + termInfo.size + " actual results")
+    val parvector = ParVector(jobs.toSeq :_*)
+    parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
+    val mappedResults = parvector.map { case (docId, vec) =>
+      (docId, mapOneVector(reader, docId, vec.iterator(null), searchField))
+    }
 
+    mappedResults.toList.foreach { case (docId, dti) =>
+      termInfo += docId -> dti
+    }
+
+    logger.info("Using query `" + queryStr + "' found " + plural(termInfo.size, "result", "results"))
     QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList)
+  }
+
+  private def plural(i: Int, singular: String, plural: String): String = {
+    i match {
+      case 1 => "1 " + singular
+      case n => n + " " + plural
+    }
   }
 
   private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {

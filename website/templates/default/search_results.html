@@ -1,5 +1,6 @@
 {% extends "main.html" %}
 {% load form_goodies %}
+{% load quantize %}
 {% block title %}Tesserae NG - Basic {{ language|capfirst }} Search Results{% endblock %}
 {% block container %}
   <div class="hero-unit">
@@ -21,7 +22,7 @@
       <tbody>
       {% for m in matches %}
         <tr>
-          <td>{{ m.score }}</td>
+          <td>{{ m.score|quantize:".001,ru" }}</td>
           <td>{{ m.distance }}</td>
           <td>{{ m.source.fields.text }}</td>
           <td>{{ m.target.fields.text }}</td>
