@@ -11,7 +11,7 @@ exec $WSGI \
   --chmod-socket=666 \
   --need-app \
   --env DJANGO_SETTINGS_MODULE=website.settings \
-  --enable-threads \
+  --disable-logging \
   --master \
   --pidfile=$WEBROOT/uwsgi.pid \
   --processes=$NUM_WORKERS \

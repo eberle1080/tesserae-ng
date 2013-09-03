@@ -46,8 +46,8 @@ cd lib_managed
 
 echo "Installing dependency jars..."
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" /home/tesserae/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.10.2.jar || die "install failed: scala-library-2.10.2.jar"
-sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.typesafe.akka/akka-actor_2.10/akka-actor_2.10-2.1.4.jar || die "install failed: akka-actor_2.10-2.1.4.jar"
-sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.typesafe/config/config-1.0.0.jar || die "install failed: config-1.0.0.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/com.typesafe.akka/akka-actor_2.10/akka-actor_2.10-2.2.1.jar || die "install failed: akka-actor_2.10-2.2.1.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.typesafe/config/config-1.0.2.jar || die "install failed: config-1.0.0.jar"
 
 echo "Installing main Solr extension jar..."
 cd ..
