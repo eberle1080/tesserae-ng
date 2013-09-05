@@ -172,25 +172,27 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val parvector = ParVector(source, target)
     parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
     val mashResults = parvector.map(qi => (buildMash(qi), buildTermFrequencies(qi)))
-    val (sourceMash, (sourceCounts, swc)) = mashResults(0)
-    val (targetMash, (targetCounts, twc)) = mashResults(1)
+    val (sourceMash, sourceAggregateInfo) = mashResults(0)
+    val (targetMash, targetAggregateInfo) = mashResults(1)
 
     // Get all document pairs with two or more terms in common
     val docPairs = findDocumentPairs(sourceMash, targetMash).filter { case (_, terms) => terms.size >= minCommonTerms }
     val metric = getMetric(distanceMetric, maxDistance)
 
     // Distance and scoring
-    val sourceWordCount = swc.toDouble
-    val targetWordCount = twc.toDouble
+    val sourceWordCount = sourceAggregateInfo.totalTermCount.toDouble
+    val targetWordCount = targetAggregateInfo.totalTermCount.toDouble
+    val frequencyInfo = FrequencyInfo(sourceAggregateInfo, targetAggregateInfo)
+
     var results: List[CompareResult] = Nil
     docPairs.foreach { case (pair, terms) =>
-      val params = DistanceParameters(pair, terms, source, target)
+      val params = DistanceParameters(pair, terms, source, target, frequencyInfo)
       metric.calculateDistance(params).map { distance =>
         if (distance <= maxDistance || maxDistance <= 0) {
           var score = 0.0
           terms.foreach { term =>
-            val sourceTermFrequency = sourceCounts.getOrElse(term, 0).toDouble / sourceWordCount
-            val targetTermFrequency = targetCounts.getOrElse(term, 0).toDouble / targetWordCount
+            val sourceTermFrequency = sourceAggregateInfo.termCounts.getOrElse(term, 0).toDouble / sourceWordCount
+            val targetTermFrequency = targetAggregateInfo.termCounts.getOrElse(term, 0).toDouble / targetWordCount
             val sourceScore = 1.0 / sourceTermFrequency
             val targetScore = 1.0 / targetTermFrequency
             score += sourceScore + targetScore
@@ -207,7 +209,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     results.sortWith { (a, b) => a.score > b.score }
   }
 
-  private def buildTermFrequencies(queryInfo: QueryInfo) = {
+  private def buildTermFrequencies(queryInfo: QueryInfo): AggregateTermInfo = {
     var termCounts: TermCountMap = Map.empty
     var totalWords = 0
 
@@ -220,7 +222,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
         }
       }
     }
-    (termCounts, totalWords)
+
+    AggregateTermInfo(termCounts, totalWords)
   }
 
   private def findDocumentPairs(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]]): Map[DocumentPair, Set[String]] = {

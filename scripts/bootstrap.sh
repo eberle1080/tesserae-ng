@@ -28,9 +28,11 @@ sudo chown -R tesserae:tesserae "$CATALINA_HOME"
 sudo rm -f "$CATALINA_HOME/logs/*"
 
 BIN_DIR="$CATALINA_HOME/bin"
+MAIN_LIB_DIR="$CATALINA_HOME/lib"
 LIB_DIR="$CATALINA_HOME/webapps/solr/WEB-INF/lib"
 
 [ -d "$LIB_DIR" ] || die "Missing directory: $LIB_DIR"
+[ -d "$MAIN_LIB_DIR" ] || die "Missing directory: $MAIN_LIB_DIR"
 [ -d "$BIN_DIR" ] || die "Missing directory: $BIN_DIR"
 
 [ -d text-analysis ] || die "Missing directory: text-analysis"
@@ -61,6 +63,9 @@ echo "Setting up Solr home..."
 cd /vagrant
 [ -f scripts/setenv.sh ] || die "Missing file: scripts/setenv.sh"
 sudo install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" scripts/setenv.sh || die "install failed: scripts/setenv.sh"
+
+[ -f tomcat/log4j.properties ] || die "Missing file: tomcat/log4j.properties"
+sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" tomcat/log4j.properties || die "install failed: tomcat/log4j.properties"
 
 [ -d solr ] || die "Missing directory: solr"
 sudo rm -rf /home/tesserae/solr || die "rm failed"
