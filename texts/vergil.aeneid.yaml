@@ -1,0 +1,32 @@
+language:           latin
+author:             Vergil
+title:              Aeneid
+online_source_name: Perseus
+online_source_link: http://www.perseus.tufts.edu/
+print_source_name:  J. B. Greenough, Bucolics, Aeneid, and Georgics Of Vergil (Ginn & Co. 1900)
+print_source_link:  
+volumes:
+    - name: Part 1 / 12
+      path: vergil.aeneid/vergil.aeneid.part.1.tess
+    - name: Part 2 / 12
+      path: vergil.aeneid/vergil.aeneid.part.2.tess
+    - name: Part 3 / 12
+      path: vergil.aeneid/vergil.aeneid.part.3.tess
+    - name: Part 4 / 12
+      path: vergil.aeneid/vergil.aeneid.part.4.tess
+    - name: Part 5 / 12
+      path: vergil.aeneid/vergil.aeneid.part.5.tess
+    - name: Part 6 / 12
+      path: vergil.aeneid/vergil.aeneid.part.6.tess
+    - name: Part 7 / 12
+      path: vergil.aeneid/vergil.aeneid.part.7.tess
+    - name: Part 8 / 12
+      path: vergil.aeneid/vergil.aeneid.part.8.tess
+    - name: Part 9 / 12
+      path: vergil.aeneid/vergil.aeneid.part.9.tess
+    - name: Part 10 / 12
+      path: vergil.aeneid/vergil.aeneid.part.10.tess
+    - name: Part 11 / 12
+      path: vergil.aeneid/vergil.aeneid.part.11.tess
+    - name: Part 12 / 12
+      path: vergil.aeneid/vergil.aeneid.part.12.tess

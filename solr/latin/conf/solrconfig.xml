@@ -69,6 +69,7 @@
        The examples below can be used to load some solr-contribs along 
        with their external dependencies.
     -->
+  <!--
   <lib dir="../../../contrib/extraction/lib" regex=".*\.jar" />
   <lib dir="../../../dist/" regex="solr-cell-\d.*\.jar" />
 
@@ -80,11 +81,12 @@
 
   <lib dir="../../../contrib/velocity/lib" regex=".*\.jar" />
   <lib dir="../../../dist/" regex="solr-velocity-\d.*\.jar" />
+  -->
 
   <!-- If a 'dir' option (with or without a regex) is used and nothing
        is found that matches, it will be ignored
     -->
-  <lib dir="/total/crap/dir/ignored" /> 
+  <!--<lib dir="/total/crap/dir/ignored" /> -->
 
   <!-- an exact 'path' can be used instead of a 'dir' to specify a 
        specific jar file.  This will cause a serious error to be logged 
@@ -481,10 +483,10 @@
            autowarmCount - the number of entries to prepopulate from
                and old cache.  
       -->
-    <filterCache class="solr.FastLRUCache"
-                 size="512"
-                 initialSize="512"
-                 autowarmCount="0"/>
+    <filterCache class="solr.LRUCache"
+                 size="1000"
+                 initialSize="500"
+                 autowarmCount="1000"/>
 
     <!-- Query Result Cache
          
@@ -625,7 +627,7 @@
          warming searcher and use it.  If "false" then all requests
          will block until the first searcher is done warming.
       -->
-    <useColdSearcher>false</useColdSearcher>
+    <useColdSearcher>true</useColdSearcher>
 
     <!-- Max Warming Searchers
          
@@ -987,6 +989,7 @@
        -->
   </requestHandler>
 
+  <!-- The Tesserae special sauce -->
   <requestHandler name="/compare" class="org.apache.solr.handler.tesserae.TesseraeCompareHandler">
   </requestHandler>
 

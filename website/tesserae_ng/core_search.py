@@ -49,6 +49,7 @@ def do_search(request, language, level):
 
     raise Http404()
 
+
 def _window_pages(page_info, maximum_pages):
     if len(page_info) == 0:
         return None, None, page_info 
@@ -84,6 +85,7 @@ def _window_pages(page_info, maximum_pages):
         results.append(pi)
 
     return page_info[0], page_info[-1], results
+
 
 def _search_basic(request, form, language):
     """
@@ -219,19 +221,10 @@ def volume_from_form(source_text, form, full_text):
     )
 
 
-def parse_text(request):
+def parse_text(text_value):
     """
     Read and parse text from the user, must be in .tess format
     """
-
-    text_value = None
-    # Buffer the whole thing into memory
-    if 'source_file' in request.FILES:
-        io = StringIO.StringIO()
-        for chunk in request.FILES['source_file'].chunks():
-            io.write(chunk)
-        text_value = io.getvalue()
-        io.close()
 
     if text_value is None:
         return (None, None)
@@ -297,6 +290,24 @@ def parse_text(request):
     return (full_text, sentences)
 
 
+def parse_text_from_request(request):
+    """
+    Buffer a request into a string, and try to parse it.
+    Should be in .tess format
+    """
+
+    text_value = None
+    # Buffer the whole thing into memory
+    if 'source_file' in request.FILES:
+        io = StringIO.StringIO()
+        for chunk in request.FILES['source_file'].chunks():
+            io.write(chunk)
+        text_value = io.getvalue()
+        io.close()
+
+    return parse_text(text_value)
+
+
 def submit(request, form):
     """
     Ingest a piece of text into the database
@@ -305,7 +316,7 @@ def submit(request, form):
     args = {'user': request.user, 'form': form,
             'authenticated': request.user.is_authenticated()}
 
-    (text, sentences) = parse_text(request)
+    (text, sentences) = parse_text_from_request(request)
     if None in (text, sentences):
         return _render(request, 'invalid.html', args)
 
