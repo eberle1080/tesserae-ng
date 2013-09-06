@@ -1,0 +1,28 @@
+language:           latin
+author:             Lucan
+title:              Bellum Civile
+online_source_name: Perseus
+online_source_link: http://www.perseus.tufts.edu/
+print_source_name:  Carolus Hermannus Weise, M. Annaei Lucani Pharsaliae Libri X, (Leipzig G. Bassus 1835)
+print_source_link:  
+volumes:
+    - name: Part 1 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.1.tess
+    - name: Part 2 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.2.tess
+    - name: Part 3 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.3.tess
+    - name: Part 4 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.4.tess
+    - name: Part 5 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.5.tess
+    - name: Part 6 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.6.tess
+    - name: Part 7 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.7.tess
+    - name: Part 8 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.8.tess
+    - name: Part 9 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.9.tess
+    - name: Part 10 / 10
+      path: lucan.bellum_civile/lucan.bellum_civile.part.10.tess
