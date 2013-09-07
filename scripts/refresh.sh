@@ -46,6 +46,16 @@ supervisorctl stop celery-worker || die "Unable to stop Celery worker"
 echo "Stopping Tomcat..."
 supervisorctl stop tomcat || die "Unable to stop Tomcat"
 
+[ -d patches ] || die "Missing directory: patches"
+cd patches || die "Can't cd to patches"
+
+echo "Patching a few files..."
+
+PYSOLR_DEST="/usr/local/lib/python2.7/dist-packages"
+sudo rm -f "$PYSOLR_DEST/pysolr.py" || die "Unable to remove buggy pysolr.py"
+sudo install -o root -g staff -m 644 -t "$PYSOLR_DEST" pysolr.py || die "install failed: pysolr.py"
+
+cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 

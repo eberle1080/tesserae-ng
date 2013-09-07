@@ -35,6 +35,16 @@ LIB_DIR="$CATALINA_HOME/webapps/solr/WEB-INF/lib"
 [ -d "$MAIN_LIB_DIR" ] || die "Missing directory: $MAIN_LIB_DIR"
 [ -d "$BIN_DIR" ] || die "Missing directory: $BIN_DIR"
 
+[ -d patches ] || die "Missing directory: patches"
+cd patches || die "Can't cd to patches"
+
+echo "Patching a few files..."
+
+PYSOLR_DEST="/usr/local/lib/python2.7/dist-packages"
+sudo rm -f "$PYSOLR_DEST/pysolr.py" || die "Unable to remove buggy pysolr.py"
+sudo install -o root -g staff -m 644 -t "$PYSOLR_DEST" pysolr.py || die "install failed: pysolr.py"
+
+cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 
@@ -157,10 +167,10 @@ else
     echo "Any documents that were automatically ingested are now being indexed. The high"
     echo "CPU load is to be expected until it's finished. If a lot of documents were"
     echo "ingested, this may take a while to complete."
-    echo ''
 fi
 
 touch /home/vagrant/.bootstrapped || die "can't touch this"
+echo ''
 echo "All done."
 
 echo ''
