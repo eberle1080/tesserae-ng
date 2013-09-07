@@ -2,6 +2,7 @@ import os
 import stat
 import reversion
 
+from optparse import make_option
 from os.path import dirname, basename, abspath, exists, isfile, join, isabs
 from django.core.management.base import BaseCommand, CommandError
 from website.tesserae_ng.models import SourceText, SourceTextSentence
@@ -11,18 +12,65 @@ from website.tesserae_ng.core_search import parse_text
 class Command(BaseCommand):
 
     args = '<yaml_path> ...'
+
     help = 'Ingest text from a batch yaml file'
+
+    option_list = BaseCommand.option_list + (
+        make_option('--is-auto',
+            dest='is-auto',
+            help='Is this an automatic ingest? Should only be toggled by the bootstrap scripts.',
+            type='string',
+            action='store'
+        ),)
+
+
+    def _print_ln(self, message=None):
+        if message is None:
+            self.stdout.write("\n")
+        elif message.endswith("\n"):
+            self.stdout.write(message)
+        else:
+            self.stdout.write(message + "\n")
+        self.stdout.flush()
+
+
+    def _parse_bool(self, string):
+        if string is None:
+            raise ValueError("string can't be None")
+        if string in (True, False):
+            return string
+        s = string.strip().lower()
+        if s in ('true', 't', 'yes', 'y', '1'):
+            return True
+        elif s in ('false', 'f', 'no', 'n', '0'):
+            return False
+        raise ValueError('Invalid boolean value: ' + string)
+
+
+    def _parse_arguments(self, options):
+        returned_options = {}
+        is_auto = False
+
+        if options.has_key('is-auto'):
+            tmp = options['is-auto']
+            if tmp is not None:
+                is_auto = self._parse_bool(tmp)
+
+        returned_options['is-auto'] = is_auto
+        return returned_options
+
 
     def handle(self, *args, **options):
         if len(args) == 0:
             raise CommandError('At least one path is required')
+        opts = self._parse_arguments(options)
         for arg in args:
             self._sanity_check_path(arg)
         for arg in args:
-            self._process_file(arg)
+            self._process_file(arg, opts)
 
 
-    def _process_file(self, path):
+    def _process_file(self, path, opts):
         import yaml
 
         base_path = dirname(abspath(path))
@@ -30,12 +78,12 @@ class Command(BaseCommand):
 
         with open(path, 'r') as fh:
             documents = yaml.load_all(fh)
-            self.stdout.write('Successfully loaded ' + str(path) + "\n")
+            self._print_ln('Successfully loaded ' + str(path))
 
             for doc in documents:
-                self._process_document(base_path, path, doc)
+                self._process_document(base_path, path, doc, opts)
 
-            self.stdout.write('Finished processing ' + str(path) + "\n")
+            self._print_ln('Finished processing ' + str(path))
 
 
     def _get_required_field(self, doc, path, key):
@@ -77,7 +125,21 @@ class Command(BaseCommand):
         return {'name': name, 'path': tess_path}
 
 
-    def _process_document(self, base_path, path, document):
+    def _process_document(self, base_path, path, document, opts):
+        """
+        """
+
+        auto_ingest = self._get_optional_field(document, 'auto_ingest')
+        if auto_ingest is None:
+            auto_ingest = True
+        else:
+            auto_ingest = self._parse_bool(auto_ingest)
+
+        if opts['is-auto']:
+            if not auto_ingest:
+                self._print_ln(' -> Skipping ' + str(tess_path) + " because it's marked for manual ingest only")
+                return
+
         lang = self._get_required_field(document, path, 'language')
         author = self._get_required_field(document, path, 'author')
         title = self._get_required_field(document, path, 'title')
@@ -86,6 +148,12 @@ class Command(BaseCommand):
         print_source_name = self._get_optional_field(document, 'print_source_name')
         print_source_link = self._get_optional_field(document, 'print_source_link')
         volumes = self._get_required_field(document, path, 'volumes')
+        is_indexed = self._get_optional_field(document, 'index')
+
+        if is_indexed is None:
+            is_indexed = True
+        else:
+            is_indexed = self._parse_bool(is_indexed)
 
         if not isinstance(volumes, (list, tuple)):
             raise RuntimeError('volumes must be an array (in file ' + str(path) + ')')
@@ -94,13 +162,13 @@ class Command(BaseCommand):
         if len(volumes) == 0:
             raise RuntimeError('you must have at least one volume defined (in file ' + str(path) + ')')
 
-        source_text = self._source_text_from_data(lang, author, title, True,
+        source_text = self._source_text_from_data(lang, author, title, is_indexed,
                                                   online_source_name, online_source_link,
                                                   print_source_name, print_source_link)
         if source_text.is_dirty():
             source_text.save()
 
-        self.stdout.write(' -> Successfully added / updated source text metadata' + "\n")
+        self._print_ln(' -> Successfully stored source text metadata')
 
         for volume_info in volumes:
             volume_name = volume_info['name']
@@ -111,7 +179,7 @@ class Command(BaseCommand):
             if None in (text, sentences):
                 raise RuntimeError('Invalid file (probably not .tess format): ' + str(tess_path))
 
-            self.stdout.write(' -> Successfully parsed ' + str(tess_path) + "\n")
+            self._print_ln(' -> Successfully parsed ' + str(tess_path))
             volume = self._volume_from_data(source_text, volume_name, text)
             if volume.is_dirty():
                 volume.save()
@@ -123,7 +191,7 @@ class Command(BaseCommand):
                     (text, begin, end) = sent
                     SourceTextSentence.objects.create(volume=volume, sentence=text, start_line=begin, end_line=end)
 
-            self.stdout.write(' -> Ingested ' + str(tess_path) + "\n")
+            self._print_ln(' -> Ingested ' + str(tess_path))
 
 
     def _sanity_check_path(self, path):
@@ -161,6 +229,20 @@ class Command(BaseCommand):
         return st.st_mode & stat.S_IROTH != 0
 
 
+    def _filter_optional(self, options):
+        """
+        Remove any blank or None values from a dictionary
+        """
+        filtered = {}
+        for k, v in options.iteritems():
+            if v is None:
+                continue
+            if len(v.strip()) == 0:
+                continue
+            filtered[k] = v
+        return filtered
+
+
     def _create_source_text_from_data(self, language, author, title, enabled, online_source_name,
                                       online_source_link, print_source_name, print_source_link):
         """
@@ -181,9 +263,8 @@ class Command(BaseCommand):
             'print_source_link': print_source_link
         }
 
-        for k, v in optional_args.iteritems():
-            if v is not None:
-                model_args[k] = v
+        for k, v in self._filter_optional(optional_args).iteritems():
+            model_args[k] = v
 
         return SourceText(**model_args)
 
@@ -220,9 +301,8 @@ class Command(BaseCommand):
             'print_source_link': print_source_link
         }
 
-        for k, v in optional_args.iteritems():
-            if v is not None:
-                setattr(source_text, k, v)
+        for k, v in self._filter_optional(optional_args).iteritems():
+            setattr(source_text, k, v)
 
         return source_text
 

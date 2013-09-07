@@ -1,3 +1,5 @@
+auto_ingest:        true
+index:              true
 language:           latin
 author:             Lucan
 title:              Bellum Civile

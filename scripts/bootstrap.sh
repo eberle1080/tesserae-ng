@@ -146,9 +146,24 @@ echo "Installing refresh script links..."
 [ -f scripts/refresh.sh ] || die "Missing file: scripts/refresh.sh"
 sudo ln -s /vagrant/scripts/refresh.sh /home/tesserae/refresh.sh
 
+if [ -e /vagrant/texts/.skip-auto-ingest ]; then
+    echo "Skipping auto-ingest because the file '.skip-auto-ingest' exists"
+else
+    echo "The system is ready, ingesting any documents marked for auto-ingest..."
+    [ -f scripts/auto_ingest.sh ] || die "Missing file: scripts/auto_ingest.sh"
+    sudo scripts/auto_ingest.sh || die "auto_ingest.sh failed"
+
+    echo ''
+    echo "Any documents that were automatically ingested are now being indexed. The high"
+    echo "CPU load is to be expected until it's finished. If a lot of documents were"
+    echo "ingested, this may take a while to complete."
+    echo ''
+fi
+
 touch /home/vagrant/.bootstrapped || die "can't touch this"
 echo "All done."
 
+echo ''
 echo '*******************************************************************************'
 echo '* End tesserae-ng bootstrap                                                   *'
 echo '*******************************************************************************'
