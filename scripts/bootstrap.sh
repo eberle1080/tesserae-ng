@@ -164,9 +164,11 @@ else
     sudo scripts/auto_ingest.sh || die "auto_ingest.sh failed"
 
     echo ''
-    echo "Any documents that were automatically ingested are now being indexed. The high"
-    echo "CPU load is to be expected until it's finished. If a lot of documents were"
-    echo "ingested, this may take a while to complete."
+    echo "Any documents that were automatically ingested are now being indexed by Solr."
+    echo "The high CPU and I/O load is to be expected until it's finished. If a lot of"
+    echo "documents were ingested, this may take a while to complete. If you'd like to"
+    echo "skip the auto-ingest feature in the future, create an empty file in the"
+    echo "'texts' directory named '.skip-auto-ingest'."
 fi
 
 touch /home/vagrant/.bootstrapped || die "can't touch this"
