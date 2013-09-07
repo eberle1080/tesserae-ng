@@ -46,6 +46,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
 
     workerPool = new ForkJoinPool(maximumThreads)
+    logger.info("Initialized worker pool with a max of " + plural(maximumThreads, "thread", "threads"))
   }
 
   def handleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {

@@ -20,6 +20,16 @@ Vagrant.configure("2") do |config|
   config.vm.network :forwarded_port, guest: 8080, host: 8080, auto_correct: true
   config.vm.network :forwarded_port, guest: 9000, host: 9000, auto_correct: true
 
+  # The default image is best suited for the least-common denominator (which is
+  # to say, i386 with one CPU and 1GB of memory). If you want the image to use
+  # more resources, uncomment the following and adjust to your needs.
+  #config.vm.provider :virtualbox do |vb|
+  #  vb.customize ["modifyvm", :id, "--memory", "2048"]
+  #  vb.customize ["modifyvm", :id, "--cpus", "4"]
+  #  vb.customize ["modifyvm", :id, "--ioapic", "on"]
+  #  vb.customize ["modifyvm", :id, "--pae", "on"]
+  #end
+
   # Run the following provisioner script once fully booted
   config.vm.provision :shell, :path => "scripts/bootstrap.sh"
 end
