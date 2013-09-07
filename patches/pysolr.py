@@ -237,7 +237,7 @@ class Solr(object):
         # No path? No problem.
         return self.url
 
-    def _send_request(self, method, path='', body=None, headers=None, files=None):
+    def _send_request(self, method, path='', body=None, headers=None, files=None, tries=0):
         url = self._create_full_url(path)
         method = method.lower()
         log_body = body
@@ -288,9 +288,17 @@ class Solr(object):
 
         if int(resp.status_code) != 200:
             error_message = self._extract_error(resp)
-            self.log.error(error_message, extra={'data': {'headers': resp.headers,
-                                                          'response': resp.content}})
-            raise SolrError(error_message)
+            if tries < 10 and error_message is not None and 'try again later' in error_message.lower():
+                self.log.error(error_message, extra={'data': {'headers': resp.headers,
+                                                              'response': resp.content}})
+                self.log.info('Trying again in 2 seconds...')
+                time.sleep(2)
+
+                return self._send_request(method, path, body, headers, files, tries + 1)
+            else:
+                self.log.error(error_message, extra={'data': {'headers': resp.headers,
+                                                              'response': resp.content}})
+                raise SolrError(error_message)
 
         return force_unicode(resp.content)
 
