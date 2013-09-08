@@ -23,6 +23,8 @@ Vagrant.configure("2") do |config|
   # The default image is best suited for the least-common denominator (which is
   # to say, i386 with one CPU and 1GB of memory). If you want the image to use
   # more resources, uncomment the following and adjust to your needs.
+  # Pro-tip, throw these settings into ~/.vagrant.d/Vagrantfile to avoid
+  # modifying this file.
   #config.vm.provider :virtualbox do |vb|
   #  vb.customize ["modifyvm", :id, "--memory", "2048"]
   #  vb.customize ["modifyvm", :id, "--cpus", "4"]
