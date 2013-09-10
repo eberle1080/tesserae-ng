@@ -17,6 +17,7 @@ import org.apache.lucene.index.{Terms, DocsAndPositionsEnum, TermsEnum, IndexRea
 import org.apache.lucene.util.BytesRef
 import org.slf4j.LoggerFactory
 import collection.parallel.immutable.ParVector
+import collection.parallel.mutable.{ParArray => MutableParArray}
 import collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
 
@@ -167,6 +168,40 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
   }
 
+  private def deduplicate(docPairs: Map[DocumentPair, Set[String]]) = {
+    var deduped = Map.empty[DocumentPair, (DocumentPair, Set[String])]
+    docPairs.foreach { case (pair, set) =>
+      val first = pair.sourceDoc
+      val second = pair.targetDoc
+      val (a, b) = if (first > second) {
+        (second, first)
+      } else {
+        (first, second)
+      }
+
+      val key = DocumentPair(a, b)
+      if (!deduped.contains(key)) {
+        deduped += key -> (pair, set)
+      }
+    }
+
+    deduped.map { case (_, (pair, set)) => pair -> set }
+  }
+
+  private def getSortedFrequencies(freqInfo: AggregateTermInfo): (SortedFrequencies, FrequencyMap) = {
+    var frequencies: SortedFrequencies = Nil
+    var freqMap: FrequencyMap = Map.empty
+    val total = freqInfo.totalTermCount.toDouble
+    freqInfo.termCounts.foreach { case (term, count) =>
+      val frequency = count.toDouble / total
+      frequencies = TermFrequencyEntry(term, frequency) :: frequencies
+      freqMap += term -> frequency
+    }
+
+    val sorted = frequencies.sortWith { case (a, b) => a.frequency < b.frequency }
+    (sorted, freqMap)
+  }
+
   private def compare(source: QueryInfo, target: QueryInfo, maxDistance: Int,
                       minCommonTerms: Int, distanceMetric: DistanceMetrics.Value): List[CompareResult] = {
 
@@ -178,34 +213,48 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val (targetMash, targetAggregateInfo) = mashResults(1)
 
     // Get all document pairs with two or more terms in common
-    val docPairs = findDocumentPairs(sourceMash, targetMash).filter { case (_, terms) => terms.size >= minCommonTerms }
+    val docPairs = deduplicate(findDocumentPairs(sourceMash, targetMash).filter { case (_, terms) => terms.size >= minCommonTerms })
     val metric = getMetric(distanceMetric, maxDistance)
 
-    // Distance and scoring
-    val sourceWordCount = sourceAggregateInfo.totalTermCount.toDouble
-    val targetWordCount = targetAggregateInfo.totalTermCount.toDouble
-    val frequencyInfo = FrequencyInfo(sourceAggregateInfo, targetAggregateInfo)
+    // Build up information about the source and target frequencies
+    val sortJobs = ParVector(sourceAggregateInfo, targetAggregateInfo)
+    sortJobs.tasksupport = new ForkJoinTaskSupport(workerPool)
+    val sortResults = sortJobs.map { ai => getSortedFrequencies(ai) }
+    val sortedSourceFrequencies = sortResults(0)._1
+    val sortedTargetFrequencies = sortResults(1)._1
+    val sourceFrequencies = sortResults(0)._2
+    val targetFrequencies = sortResults(1)._2
+    val frequencyInfo = SortedFrequencyInfo(sortedSourceFrequencies, sortedTargetFrequencies)
 
-    var results: List[CompareResult] = Nil
-    docPairs.foreach { case (pair, terms) =>
+    // Calculate the scores and distances in parallel
+    val parallelPairs = docPairs.par
+    parallelPairs.tasksupport = new ForkJoinTaskSupport(workerPool)
+    val mappedResults = parallelPairs.map { case (pair, terms) =>
       val params = DistanceParameters(pair, terms, source, target, frequencyInfo)
-      metric.calculateDistance(params).map { distance =>
-        if (distance <= maxDistance || maxDistance <= 0) {
-          var score = 0.0
-          terms.foreach { term =>
-            val sourceTermFrequency = sourceAggregateInfo.termCounts.getOrElse(term, 0).toDouble / sourceWordCount
-            val targetTermFrequency = targetAggregateInfo.termCounts.getOrElse(term, 0).toDouble / targetWordCount
-            val sourceScore = 1.0 / sourceTermFrequency
-            val targetScore = 1.0 / targetTermFrequency
-            score += sourceScore + targetScore
-          }
+      metric.calculateDistance(params) match {
+        case None => None
+        case Some(distance) => {
+          if (distance <= maxDistance || maxDistance <= 0) {
+            var score = 0.0
+            terms.foreach { term =>
+              val sourceTermFrequency = sourceFrequencies.getOrElse(term, -1.0)
+              val targetTermFrequency = targetFrequencies.getOrElse(term, -1.0)
+              val sourceScore = 1.0 / sourceTermFrequency
+              val targetScore = 1.0 / targetTermFrequency
+              score += sourceScore + targetScore
+            }
 
-          val finalScore = math.log(score / distance.toDouble)
-          val result = CompareResult(pair, terms, finalScore, distance)
-          results = result :: results
+            val finalScore = math.log(score / distance.toDouble)
+            val result = CompareResult(pair, terms, finalScore, distance)
+            Some(result)
+          } else {
+            None
+          }
         }
       }
-    }
+    }.filter(_.isDefined).map(_.get)
+
+    val results = mappedResults.toList
 
     // Return the results sorted by score (descending)
     results.sortWith { (a, b) => a.score > b.score }

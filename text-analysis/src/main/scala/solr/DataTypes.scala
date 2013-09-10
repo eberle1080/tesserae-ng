@@ -9,8 +9,14 @@ object DataTypes {
   // Maps term text -> count
   type TermCountMap = Map[String, Int]
 
+  // Maps term text -> frequency
+  type FrequencyMap = Map[String, Double]
+
   // Maps doc id -> DocumentTermInfo
   type QueryTermInfo = Map[Int, DocumentTermInfo]
+
+  // A list of sorted frequencies
+  type SortedFrequencies = List[TermFrequencyEntry]
 
   type TermList = java.util.LinkedList[String]
   type DocFields = java.util.HashMap[String, AnyRef]
@@ -29,6 +35,8 @@ final case class QueryInfo(termInfo: QueryTermInfo, fieldList: List[String], sea
 final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
 final case class AggregateTermInfo(termCounts: TermCountMap, totalTermCount: Int) // used for calculating frequency
 final case class FrequencyInfo(sourceTerms: AggregateTermInfo, targetTerms: AggregateTermInfo)
+final case class SortedFrequencyInfo(sourceFrequencies: SortedFrequencies, targetFrequencies: SortedFrequencies)
 final case class DistanceParameters(pair: DocumentPair, commonTerms: Set[String], source: QueryInfo, target: QueryInfo,
-                                    frequencies: FrequencyInfo)
+                                    frequencies: SortedFrequencyInfo)
 final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Double, distance: Int)
+final case class TermFrequencyEntry(term: String, frequency: Double)

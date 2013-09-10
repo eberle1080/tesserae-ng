@@ -1,5 +1,7 @@
 package org.apache.solr.handler.tesserae
 
+import org.apache.solr.handler.tesserae.DataTypes.SortedFrequencies
+
 object DistanceMetrics extends Enumeration {
   val FREQ, FREQ_TARGET, FREQ_SOURCE, SPAN, SPAN_TARGET, SPAN_SOURCE = Value
   val DEFAULT_METRIC = FREQ
@@ -40,14 +42,22 @@ trait Distance {
 trait DistanceMixin {
   import DataTypes._
 
-  protected def sortedFreq(id: Int, info: QueryInfo): List[(Int, String)] = {
-    val terms = info.termInfo(id).termCounts
-    var counts: List[(Int, String)] = Nil
-    terms.foreach { case (term, freq) =>
-      counts = (freq, term) :: counts
-    }
+  protected def sortedFreq(id: Int, info: QueryInfo, freqInfo: SortedFrequencies): List[TermFrequencyEntry] = {
+    var frequencies: List[TermFrequencyEntry] = Nil
+    val termInfo = info.termInfo(id).termCounts
+    freqInfo.foreach { entry =>
+      termInfo.get(entry.term).map { ct =>
+        if (ct > 0) {
+          frequencies = entry :: frequencies
+        }
+      }
 
-    counts.sortWith { (a, b) => a._1 < b._1 }
+      // Since we only use the first 2 anyway...
+      if (frequencies.length >= 2) {
+        return frequencies
+      }
+    }
+    frequencies
   }
 
   protected def filterPositions(tpl: TermPositionsList): TermPositionsList = {
@@ -83,7 +93,7 @@ trait DistanceMixin {
   protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermPositionsList = {
     val terms = info.termInfo(id).termPositions
     val filtered = if (filter) { filterPositions(terms) } else { terms }
-    terms.sortWith { (a, b) => a.position < b.position }
+    filtered.sortWith { (a, b) => a.position < b.position }
   }
 
   protected def distanceBetween(p0: TermPositionsListEntry, p1: TermPositionsListEntry) = {
@@ -96,13 +106,13 @@ trait DistanceMixin {
 
 class FreqDistance extends Distance with DistanceMixin {
 
-  protected def internalDistance(docID: Int, info: QueryInfo, freqInfo: AggregateTermInfo): Option[Int] = {
-    val terms = sortedFreq(docID, info)
+  protected def internalDistance(docID: Int, info: QueryInfo, freqInfo: SortedFrequencies): Option[Int] = {
+    val terms = sortedFreq(docID, info, freqInfo)
     if (terms.length < 2) {
       None
     } else {
       val positions = sortedPositions(docID, info)
-      val (tt0, tt1) = (terms(0)._2, terms(1)._2)
+      val (tt0, tt1) = (terms(0).term, terms(1).term)
       val (t0, t1) = try {
         val _t0 = positions.find(tp => tp.term == tt0).get
         val _t1 = positions.find(tp => tp.term == tt1).get
@@ -118,10 +128,10 @@ class FreqDistance extends Distance with DistanceMixin {
   }
 
   def calculateDistance(params: DistanceParameters): Option[Int] = {
-    internalDistance(params.pair.sourceDoc, params.source, params.frequencies.sourceTerms) match {
+    internalDistance(params.pair.sourceDoc, params.source, params.frequencies.sourceFrequencies) match {
       case None => None
       case Some(sourceDist) =>
-        internalDistance(params.pair.targetDoc, params.target, params.frequencies.targetTerms) match {
+        internalDistance(params.pair.targetDoc, params.target, params.frequencies.targetFrequencies) match {
           case None => None
           case Some(targetDist) => Some(sourceDist + targetDist)
         }
@@ -131,12 +141,12 @@ class FreqDistance extends Distance with DistanceMixin {
 
 class FreqTargetDistance extends FreqDistance {
   override def calculateDistance(params: DistanceParameters) =
-    internalDistance(params.pair.targetDoc, params.target, params.frequencies.targetTerms)
+    internalDistance(params.pair.targetDoc, params.target, params.frequencies.targetFrequencies)
 }
 
 class FreqSourceDistance extends FreqDistance {
   override def calculateDistance(params: DistanceParameters) =
-    internalDistance(params.pair.sourceDoc, params.source, params.frequencies.sourceTerms)
+    internalDistance(params.pair.sourceDoc, params.source, params.frequencies.sourceFrequencies)
 }
 
 class SpanDistance extends Distance with DistanceMixin {
