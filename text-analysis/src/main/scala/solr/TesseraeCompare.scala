@@ -237,10 +237,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
           if (distance <= maxDistance || maxDistance <= 0) {
             var score = 0.0
             terms.foreach { term =>
-              val sourceTermFrequency = sourceFrequencies.getOrElse(term, -1.0)
-              val targetTermFrequency = targetFrequencies.getOrElse(term, -1.0)
-              val sourceScore = 1.0 / sourceTermFrequency
-              val targetScore = 1.0 / targetTermFrequency
+              val sourceScore = 1.0 / sourceFrequencies.getOrElse(term, -1.0)
+              val targetScore = 1.0 / targetFrequencies.getOrElse(term, -1.0)
               score += sourceScore + targetScore
             }
 

@@ -34,3 +34,6 @@ volumes:
       path: vergil.aeneid/vergil.aeneid.part.12.tess
     - name: All volumes
       path: vergil.aeneid/vergil.aeneid.tess
+      # Set this to true to skip the import of just this one
+      # meta-collection. Or just comment this entry out.
+      skip: false

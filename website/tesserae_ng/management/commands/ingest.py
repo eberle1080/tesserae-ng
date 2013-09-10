@@ -122,7 +122,13 @@ class Command(BaseCommand):
         if not self._can_read(tess_path):
             raise RuntimeError("Path isn't readable: " + str(tess_path))
 
-        return {'name': name, 'path': tess_path}
+        should_skip = False
+        if vol.has_key('skip'):
+            skip = vol['skip']
+            if skip is not None:
+                should_skip = self._parse_bool(skip)
+
+        return {'name': name, 'path': tess_path, 'skip': should_skip}
 
 
     def _process_document(self, base_path, path, document, opts):
@@ -173,6 +179,10 @@ class Command(BaseCommand):
         for volume_info in volumes:
             volume_name = volume_info['name']
             tess_path = volume_info['path']
+            if volume_info['skip']:
+                self._print_ln(' -> Skipping over ' + str(tess_path))
+                continue
+
             with open(tess_path, 'r') as text_handle:
                 (text, sentences) = parse_text(text_handle.read())
 
