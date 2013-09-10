@@ -28,3 +28,5 @@ volumes:
       path: lucan.bellum_civile/lucan.bellum_civile.part.9.tess
     - name: Part 10 / 10
       path: lucan.bellum_civile/lucan.bellum_civile.part.10.tess
+    - name: All volumes
+      path: lucan.bellum_civile/lucan.bellum_civile.tess

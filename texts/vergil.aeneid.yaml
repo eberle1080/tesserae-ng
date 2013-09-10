@@ -32,3 +32,5 @@ volumes:
       path: vergil.aeneid/vergil.aeneid.part.11.tess
     - name: Part 12 / 12
       path: vergil.aeneid/vergil.aeneid.part.12.tess
+    - name: All volumes
+      path: vergil.aeneid/vergil.aeneid.tess
