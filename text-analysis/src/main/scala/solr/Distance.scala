@@ -38,7 +38,7 @@ trait Distance {
 
 // Some re-usable distance functions
 trait DistanceMixin {
-  import TesseraeCompareHandler.TermPositionsList
+  import DataTypes._
 
   protected def sortedFreq(id: Int, info: QueryInfo): List[(Int, String)] = {
     val terms = info.termInfo(id).termCounts

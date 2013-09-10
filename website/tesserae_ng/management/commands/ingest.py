@@ -78,7 +78,7 @@ class Command(BaseCommand):
 
         with open(path, 'r') as fh:
             documents = yaml.load_all(fh)
-            self._print_ln('Successfully loaded ' + str(path))
+            self._print_ln('Loaded ' + str(path))
 
             for doc in documents:
                 self._process_document(base_path, path, doc, opts)
@@ -168,7 +168,7 @@ class Command(BaseCommand):
         if source_text.is_dirty():
             source_text.save()
 
-        self._print_ln(' -> Successfully stored source text metadata')
+        self._print_ln(' -> Stored source text metadata')
 
         for volume_info in volumes:
             volume_name = volume_info['name']
@@ -179,10 +179,16 @@ class Command(BaseCommand):
             if None in (text, sentences):
                 raise RuntimeError('Invalid file (probably not .tess format): ' + str(tess_path))
 
-            self._print_ln(' -> Successfully parsed ' + str(tess_path))
+            self._print_ln(' -> Parsed ' + str(tess_path))
             volume = self._volume_from_data(source_text, volume_name, text)
             if volume.is_dirty():
                 volume.save()
+
+            sent = " sentence"
+            if len(sentences) != 1:
+                sent = " sentences"
+
+            self._print_ln(' -> Sending ' + str(len(sentences)) + sent + ' to the queue for indexing...')
 
             volume.sourcetextsentence_set.all().delete()
             with reversion.create_revision():

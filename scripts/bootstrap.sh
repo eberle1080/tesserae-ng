@@ -169,6 +169,11 @@ else
     echo "documents were ingested, this may take a while to complete. If you'd like to"
     echo "skip the auto-ingest feature in the future, create an empty file in the"
     echo "'texts' directory named '.skip-auto-ingest'."
+    echo ''
+    echo "If you'd like to keep an eye on the index queue, you can log in to the box"
+    echo "and run the following command to see the count of the remaining documents:"
+    echo ''
+    echo "  \$> sudo rabbitmqctl list_queues -p tesserae-ng | grep '^celery' | cut -f2"
 fi
 
 touch /home/vagrant/.bootstrapped || die "can't touch this"

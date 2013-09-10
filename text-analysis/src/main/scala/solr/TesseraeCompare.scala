@@ -22,6 +22,7 @@ import scala.concurrent.forkjoin.ForkJoinPool
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
+  import DataTypes._
   import TesseraeCompareHandler._
 
   private lazy val logger = LoggerFactory.getLogger(getClass)
@@ -440,19 +441,4 @@ object TesseraeCompareHandler {
   val DEFAULT_MIN_COMMON_TERMS = 2 // can't be less than 2
   val DEFAULT_HIGHLIGHT = false
   val SPLIT_REGEX = ",| ".r
-
-  // Countains a list of term + position tuples
-  type TermPositionsList = List[TermPositionsListEntry]
-
-  // Maps term text -> count
-  type TermCountMap = Map[String, Int]
-
-  // Maps doc id -> DocumentTermInfo
-  type QueryTermInfo = Map[Int, DocumentTermInfo]
-
-  type TermList = java.util.LinkedList[String]
-  type DocFields = java.util.HashMap[String, AnyRef]
-  type TesseraeDoc = java.util.HashMap[String, AnyRef]
-  type TesseraeMatch = java.util.HashMap[String, AnyRef]
-  type TesseraeMatches = java.util.LinkedList[TesseraeMatch]
 }
