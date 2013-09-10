@@ -49,12 +49,12 @@ trait DistanceMixin {
       termInfo.get(entry.term).map { ct =>
         if (ct > 0) {
           frequencies = entry :: frequencies
-        }
-      }
 
-      // Since we only use the first 2 anyway...
-      if (frequencies.length >= 2) {
-        return frequencies
+          // Since we only use the first 2 anyway...
+          if (frequencies.length >= 2) {
+            return frequencies
+          }
+        }
       }
     }
     frequencies
