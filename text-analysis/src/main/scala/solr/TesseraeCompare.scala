@@ -103,14 +103,16 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val sourceParams = QueryParameters(TesseraeCompareParams.SQ, TesseraeCompareParams.SF, TesseraeCompareParams.SFL)
     val targetParams = QueryParameters(TesseraeCompareParams.TQ, TesseraeCompareParams.TF, TesseraeCompareParams.TFL)
 
-    val useCache = params.getBool(TesseraeCompareParams.UC, true)
+    val readCache = params.getBool(TesseraeCompareParams.RC, true)
+    val writeCache = params.getBool(TesseraeCompareParams.WC, true)
+
     val cacheKey =
       CacheKey(maxDistance, minCommonTerms, metric,
         params.get(TesseraeCompareParams.SQ), params.get(TesseraeCompareParams.SF), params.get(TesseraeCompareParams.SFL),
         params.get(TesseraeCompareParams.TQ), params.get(TesseraeCompareParams.TF), params.get(TesseraeCompareParams.TFL))
 
     var cachedResults: Option[CacheValue] = None
-    if (useCache) {
+    if (readCache) {
       cache.get(cacheKey) match {
         case null => // not found
         case elem: Element => {
@@ -142,7 +144,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
     }
 
-    if (!fromCache) {
+    if (writeCache && !fromCache) {
       val value = CacheValue(sortedResults, sourceFieldList, targetFieldList)
       val elem = new Element(cacheKey, value)
       cache.put(elem)
