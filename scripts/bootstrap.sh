@@ -173,7 +173,7 @@ else
     echo "If you'd like to keep an eye on the index queue, you can log in to the box"
     echo "and run the following command to see the count of the remaining documents:"
     echo ''
-    echo "  \$> sudo rabbitmqctl list_queues -p tesserae-ng | grep '^celery' | cut -f2"
+    echo "  \$> sudo rabbitmqctl list_queues -p tesserae-ng | grep ^celery | cut -f2"
 fi
 
 touch /home/vagrant/.bootstrapped || die "can't touch this"

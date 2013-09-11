@@ -30,6 +30,9 @@ HAYSTACK_CONNECTIONS = {
     },
 }
 
+# Change to 'sentence' for sentence-based parsing
+TESS_PARSE_MODE = 'line'
+
 # For celery
 BROKER_URL = 'amqp://tesserae-ng:QAwSSvV8HeNNOXEfokrK@localhost:5672/tesserae-ng'
 

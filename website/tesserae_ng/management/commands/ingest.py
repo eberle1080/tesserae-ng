@@ -6,7 +6,7 @@ from optparse import make_option
 from os.path import dirname, basename, abspath, exists, isfile, join, isabs
 from django.core.management.base import BaseCommand, CommandError
 from website.tesserae_ng.models import SourceText, SourceTextSentence
-from website.tesserae_ng.core_search import parse_text
+from website.tesserae_ng.core_search import parse_text, get_tess_mode
 
 
 class Command(BaseCommand):
@@ -194,9 +194,9 @@ class Command(BaseCommand):
             if volume.is_dirty():
                 volume.save()
 
-            sent = " sentence"
+            sent = ' ' + get_tess_mode()
             if len(sentences) != 1:
-                sent = " sentences"
+                sent += 's'
 
             self._print_ln(' -> Sending ' + str(len(sentences)) + sent + ' to the queue for indexing...')
 

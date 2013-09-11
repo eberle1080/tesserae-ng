@@ -4,6 +4,7 @@ import logging
 
 from django.http import HttpResponse, Http404
 from django.views.decorators.http import require_GET, require_POST
+from django.conf import settings
 from views import _render
 from website.tesserae_ng.models import SourceText, SourceTextSentence
 from website.tesserae_ng.forms import SimpleSearchForm
@@ -221,7 +222,7 @@ def volume_from_form(source_text, form, full_text):
     )
 
 
-def parse_text(text_value):
+def _parse_tess_line(text_value):
     """
     Read and parse text from the user, must be in .tess format
     """
@@ -257,10 +258,24 @@ def parse_text(text_value):
 
         lines.append((right, start, end))
 
+    full_text = '\n'.join([l[0] for l in lines])
+
+    return (full_text, lines)
+
+
+def _parse_tess_sentence(text_value):
+    """
+    Read and parse text from the user, must be in .tess format
+    """
+
+    if text_value is None:
+        return (None, None)
+
+    (full_text, lines) = _parse_tess_line(text_value)
+
     sentences = []
     phrase_delimiter = r'([.?!;:])'
     only_delimeter = re.compile(r'^[.?!;:]$')
-    full_text = '\n'.join([l[0] for l in lines])
 
     current_sentence = None
     for text, start, end in lines:
@@ -288,6 +303,40 @@ def parse_text(text_value):
                     current_sentence = (current_sentence[0] + ' ' + part, current_sentence[1], end)
 
     return (full_text, sentences)
+
+
+def get_tess_mode():
+    """
+    Get a string describing how to parse .tess files (line or sentence)
+    """
+
+    mode = 'line'
+    try:
+        if settings.TESS_PARSE_MODE != None:
+            if settings.TESS_PARSE_MODE != 'default':
+                mode = settings.TESS_PARSE_MODE
+    except AttributeError:
+        # They didn't define this setting, no biggie
+        pass
+
+    if mode in ('line', 'lines'):
+        return 'line'
+    elif mode in ('sentence', 'sentences'):
+        return 'sentence'
+    else:
+        logger.warn("Invalid tess mode: '" + str(mode) + "', falling back to 'line'")
+        return 'line'
+
+
+def parse_text(text_value):
+    """
+    Read and parse text from the user, must be in .tess format
+    """
+
+    if get_tess_mode() == 'sentence':
+        return _parse_tess_sentence(text_value)
+    else:
+        return _parse_tess_line(text_value)
 
 
 def parse_text_from_request(request):
