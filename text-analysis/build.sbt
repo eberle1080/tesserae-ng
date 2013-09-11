@@ -12,6 +12,10 @@ libraryDependencies += "com.typesafe.akka" % "akka-actor_2.10" % "2.2.1"
 
 libraryDependencies += "org.slf4j" % "slf4j-log4j12" % "1.7.5"
 
+libraryDependencies += "net.sf.ehcache" % "ehcache-core" % "2.6.6"
+
+libraryDependencies += "javax.transaction" % "jta" % "1.1"
+
 resolvers += "restlet" at "http://maven.restlet.org/"
 
 retrieveManaged := true

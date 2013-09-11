@@ -31,6 +31,9 @@ object TesseraeCompareParams {
   // distance metric
   val METRIC = PREFIX + "metric"
 
+  // use cache
+  val UC = PREFIX + "uc"
+
   // include highlight info?
   val HIGHLIGHT = PREFIX + "highlight"
 }

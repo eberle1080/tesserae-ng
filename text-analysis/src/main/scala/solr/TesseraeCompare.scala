@@ -17,9 +17,9 @@ import org.apache.lucene.index.{Terms, DocsAndPositionsEnum, TermsEnum, IndexRea
 import org.apache.lucene.util.BytesRef
 import org.slf4j.LoggerFactory
 import collection.parallel.immutable.ParVector
-import collection.parallel.mutable.{ParArray => MutableParArray}
 import collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
+import net.sf.ehcache.{Element, CacheManager, Ehcache}
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -29,9 +29,13 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   private lazy val logger = LoggerFactory.getLogger(getClass)
   private val DEFAULT_MAX_THREADS =
     Runtime.getRuntime.availableProcessors() + 1
+  private val DEFAULT_CACHE_NAME = "tesseraeCompare"
 
   private var maximumThreads = DEFAULT_MAX_THREADS
   private var workerPool: ForkJoinPool = null
+  private var ehcacheName: String = DEFAULT_CACHE_NAME
+  private lazy val ehcacheManager = CacheManager.getInstance
+  private var cache: Ehcache = null
 
   override def init(args: NamedList[_]) {
     super.init(args)
@@ -49,6 +53,21 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     workerPool = new ForkJoinPool(maximumThreads)
     logger.info("Initialized worker pool with a max of " + plural(maximumThreads, "thread", "threads"))
+
+    val ehcacheStr = args.get("cacheName")
+    ehcacheName = ehcacheStr match {
+      case null => DEFAULT_CACHE_NAME
+      case str: String => str
+    }
+
+    logger.info("Using cache `" + ehcacheName + "'")
+    cache = ehcacheManager.getEhcache(ehcacheName)
+    if (cache == null) {
+      logger.warn("Unable to find cache `" + ehcacheName + "', configuring a default one")
+      cache = ehcacheManager.addCacheIfAbsent(ehcacheName)
+    }
+
+    logger.info("Initialized Ehcache")
   }
 
   def handleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
@@ -84,18 +103,53 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val sourceParams = QueryParameters(TesseraeCompareParams.SQ, TesseraeCompareParams.SF, TesseraeCompareParams.SFL)
     val targetParams = QueryParameters(TesseraeCompareParams.TQ, TesseraeCompareParams.TF, TesseraeCompareParams.TFL)
 
-    val paramsVector = ParVector(sourceParams, targetParams)
-    paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
-    val gatherInfoResults = paramsVector.map(qp => gatherInfo(req, rsp, qp))
-    val sourceInfo = gatherInfoResults(0)
-    val targetInfo = gatherInfoResults(1)
+    val useCache = params.getBool(TesseraeCompareParams.UC, true)
+    val cacheKey =
+      CacheKey(maxDistance, minCommonTerms, metric,
+        params.get(TesseraeCompareParams.SQ), params.get(TesseraeCompareParams.SF), params.get(TesseraeCompareParams.SFL),
+        params.get(TesseraeCompareParams.TQ), params.get(TesseraeCompareParams.TF), params.get(TesseraeCompareParams.TFL))
 
-    val (results, totalResultCount) = {
-      // The bulk of the work happens here
-      val sortedResults = compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric)
-      val total = sortedResults.length
-      (sortedResults.drop(start).take(rows), total)
+    var cachedResults: Option[CacheValue] = None
+    if (useCache) {
+      cache.get(cacheKey) match {
+        case null => // not found
+        case elem: Element => {
+          // found maybe
+          elem.getObjectValue match {
+            case null =>
+            // oh well
+            case cv: CacheValue =>
+              cachedResults = Some(cv)
+            case _ =>
+            // too bad
+          }
+        }
+      }
     }
+
+    val (sortedResults, sourceFieldList, targetFieldList, fromCache) = cachedResults match {
+      case None => {
+        val paramsVector = ParVector(sourceParams, targetParams)
+        paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
+        val gatherInfoResults = paramsVector.map(qp => gatherInfo(req, rsp, qp))
+        val sourceInfo = gatherInfoResults(0)
+        val targetInfo = gatherInfoResults(1)
+        (compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric),
+          sourceInfo.fieldList, targetInfo.fieldList, false)
+      }
+      case Some(cv) => {
+        (cv.results, cv.sourceFieldList, cv.targetFieldList, true)
+      }
+    }
+
+    if (!fromCache) {
+      val value = CacheValue(sortedResults, sourceFieldList, targetFieldList)
+      val elem = new Element(cacheKey, value)
+      cache.put(elem)
+    }
+
+    val results = sortedResults.drop(start).take(rows)
+    val totalResultCount = sortedResults.length
 
     val searcher = req.getSearcher
     val reader = searcher.getIndexReader
@@ -103,9 +157,9 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     def processResult(result: CompareResult, sourceIfTrue: Boolean, populate: DocFields) = {
       val (docId, fieldList) = sourceIfTrue match {
         case true =>
-          (result.pair.sourceDoc, sourceInfo.fieldList)
+          (result.pair.sourceDoc, sourceFieldList)
         case false =>
-          (result.pair.targetDoc, targetInfo.fieldList)
+          (result.pair.targetDoc, targetFieldList)
       }
 
       val doc = reader.document(docId)

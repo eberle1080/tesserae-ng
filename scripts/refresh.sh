@@ -77,11 +77,14 @@ install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" "text-analysis_2.10-1.0.jar
 
 echo "Refreshing Solr configuration (index data will be preserved)..."
 cd /vagrant
-[ -f scripts/setenv.sh ] || die "Missing file: scripts/setenv.sh"
-install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" scripts/setenv.sh || die "install failed: scripts/setenv.sh"
+[ -f conf/setenv.sh ] || die "Missing file: conf/setenv.sh"
+install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" conf/setenv.sh || die "install failed: conf/setenv.sh"
 
-[ -f tomcat/log4j.properties ] || die "Missing file: tomcat/log4j.properties"
-sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" tomcat/log4j.properties || die "install failed: tomcat/log4j.properties"
+[ -f conf/ehcache.xml ] || die "Missing file: conf/ehcache.xml"
+sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/ehcache.xml || die "install failed: conf/ehcache.xml"
+
+[ -f conf/log4j.properties ] || die "Missing file: conf/log4j.properties"
+sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/log4j.properties || die "install failed: conf/log4j.properties"
 
 [ -d solr ] || die "Missing directory: solr"
 cd solr || die "can't cd to solr"

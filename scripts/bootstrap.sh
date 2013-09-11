@@ -60,6 +60,7 @@ echo "Installing dependency jars..."
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" /home/tesserae/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.10.2.jar || die "install failed: scala-library-2.10.2.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/com.typesafe.akka/akka-actor_2.10/akka-actor_2.10-2.2.1.jar || die "install failed: akka-actor_2.10-2.2.1.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.typesafe/config/config-1.0.2.jar || die "install failed: config-1.0.0.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/net.sf.ehcache/ehcache-core/ehcache-core-2.6.6.jar || die "install failed: ehcache-core-2.6.6.jar"
 
 echo "Installing main Solr extension jar..."
 cd ..
@@ -71,11 +72,14 @@ sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" "text-analysis_2.10-1.
 
 echo "Setting up Solr home..."
 cd /vagrant
-[ -f scripts/setenv.sh ] || die "Missing file: scripts/setenv.sh"
-sudo install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" scripts/setenv.sh || die "install failed: scripts/setenv.sh"
+[ -f conf/setenv.sh ] || die "Missing file: conf/setenv.sh"
+sudo install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" conf/setenv.sh || die "install failed: conf/setenv.sh"
 
-[ -f tomcat/log4j.properties ] || die "Missing file: tomcat/log4j.properties"
-sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" tomcat/log4j.properties || die "install failed: tomcat/log4j.properties"
+[ -f conf/ehcache.xml ] || die "Missing file: conf/ehcache.xml"
+sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/ehcache.xml || die "install failed: conf/ehcache.xml"
+
+[ -f conf/log4j.properties ] || die "Missing file: conf/log4j.properties"
+sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/log4j.properties || die "install failed: conf/log4j.properties"
 
 [ -d solr ] || die "Missing directory: solr"
 sudo rm -rf /home/tesserae/solr || die "rm failed"

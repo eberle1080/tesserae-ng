@@ -40,3 +40,8 @@ final case class DistanceParameters(pair: DocumentPair, commonTerms: Set[String]
                                     frequencies: SortedFrequencyInfo)
 final case class CompareResult(pair: DocumentPair, commonTerms: Set[String], score: Double, distance: Int)
 final case class TermFrequencyEntry(term: String, frequency: Double)
+
+final case class CacheKey(md: Int, mct: Int, metric: DistanceMetrics.Value,
+                          sq: String, sf: String, sfl: String,
+                          tq: String, tf: String, tfl: String)
+final case class CacheValue(results: List[CompareResult], sourceFieldList: List[String], targetFieldList: List[String])
