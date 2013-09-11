@@ -214,6 +214,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     rsp.add("matchOffset", start)
 
     rsp.add("matches", matches)
+    rsp.add("cached", fromCache)
   }
 
   private def getMetric(distanceMetric: DistanceMetrics.Value, maxDistance: Int): Distance = {
