@@ -16,6 +16,8 @@ libraryDependencies += "net.sf.ehcache" % "ehcache-core" % "2.6.6"
 
 libraryDependencies += "javax.transaction" % "jta" % "1.1"
 
+libraryDependencies += "com.codahale.metrics" % "metrics-core" % "3.0.1"
+
 resolvers += "restlet" at "http://maven.restlet.org/"
 
 retrieveManaged := true

@@ -1,7 +1,5 @@
 package org.apache.lucene.analysis.la
 
-import java.io.IOException
-
 import org.apache.lucene.analysis.TokenFilter
 import org.apache.lucene.analysis.TokenStream
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
@@ -9,6 +7,8 @@ import org.apache.lucene.analysis.tokenattributes.KeywordAttribute
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute
+import org.apache.solr.handler.tesserae.pos.PartOfSpeech
+import org.apache.solr.handler.tesserae.metrics.CommonMetrics
 
 object LatinStemFilter {
   val TYPE_NOUN = "LATIN_NOUN"
@@ -30,20 +30,26 @@ final class LatinStemFilter(input: TokenStream) extends TokenFilter(input) {
   private var currentTokenEnd: Int = 0
   private var currentTokenPosition: Int = 0
 
-  override final def incrementToken(): Boolean = {
+  override def incrementToken(): Boolean = {
+    CommonMetrics.latinStemOps.mark()
+
     if (currentTokenBuffer == null) {
       if (!input.incrementToken()) {
         return false
       } else {
-        if (keywordAttr.isKeyword()) {
-          return true;
+        if (keywordAttr.isKeyword) {
+          var stemmedToken = String.valueOf(currentTokenBuffer, 0,  currentTokenLength)
+            // tag it
+          stemmedToken = PartOfSpeech(PartOfSpeech.KEYWORD, stemmedToken)
+          CommonMetrics.latinKeywords.inc()
+          return true
         }
 
-        currentTokenBuffer = termAtt.buffer().clone();
-        currentTokenLength = termAtt.length();
-        currentTokenStart = offsetAtt.startOffset();
-        currentTokenEnd = offsetAtt.endOffset();
-        currentTokenPosition = posIncAtt.getPositionIncrement();
+        currentTokenBuffer = termAtt.buffer().clone()
+        currentTokenLength = termAtt.length()
+        currentTokenStart = offsetAtt.startOffset()
+        currentTokenEnd = offsetAtt.endOffset()
+        currentTokenPosition = posIncAtt.getPositionIncrement
       }
     }
 
@@ -55,11 +61,20 @@ final class LatinStemFilter(input: TokenStream) extends TokenFilter(input) {
     var stemmedToken: String = null
     if (termLength == -1) {
       stemmedToken = String.valueOf(currentTokenBuffer, 0,  currentTokenLength)
+      // tag it
+      stemmedToken = PartOfSpeech(PartOfSpeech.UNKNOWN, stemmedToken)
+      CommonMetrics.latinUnknown.inc()
     } else {
       if (stemAsNoun) {
         stemmedToken = stemmer.stemAsNoun(currentTokenBuffer, termLength)
+        // tag it
+        stemmedToken = PartOfSpeech(PartOfSpeech.NOUN, stemmedToken)
+        CommonMetrics.latinNouns.inc()
       } else {
         stemmedToken = stemmer.stemAsVerb(currentTokenBuffer, termLength)
+        // tag it
+        stemmedToken = PartOfSpeech(PartOfSpeech.VERB, stemmedToken)
+        CommonMetrics.latinVerbs.inc()
       }
     }
 

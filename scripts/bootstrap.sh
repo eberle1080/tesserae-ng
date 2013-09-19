@@ -61,6 +61,7 @@ sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" /home/tesserae/.ivy2/c
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/com.typesafe.akka/akka-actor_2.10/akka-actor_2.10-2.2.1.jar || die "install failed: akka-actor_2.10-2.2.1.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.typesafe/config/config-1.0.2.jar || die "install failed: config-1.0.0.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/net.sf.ehcache/ehcache-core/ehcache-core-2.6.6.jar || die "install failed: ehcache-core-2.6.6.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.metrics/metrics-core/metrics-core-3.0.1.jar || die "install failed: metrics-core-3.0.1"
 
 echo "Installing main Solr extension jar..."
 cd ..
@@ -152,6 +153,7 @@ sudo supervisorctl update
 echo "Poking a few holes in the firewall..."
 sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 8080 -m conntrack --ctstate NEW -j ACCEPT
 sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 9000 -m conntrack --ctstate NEW -j ACCEPT
+sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 9099 -m conntrack --ctstate NEW -j ACCEPT
 
 echo "Saving firewall state..."
 sudo iptables-save > /etc/firewall.conf

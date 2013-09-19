@@ -20,6 +20,8 @@ import collection.parallel.immutable.ParVector
 import collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
 import net.sf.ehcache.{Element, CacheManager, Ehcache}
+import org.apache.solr.handler.tesserae.pos.PartOfSpeech
+import org.apache.solr.handler.tesserae.metrics.CommonMetrics
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -71,6 +73,21 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   }
 
   def handleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
+    CommonMetrics.compareOps.mark()
+    val ctx = CommonMetrics.compareTime.time()
+    try {
+      internalHandleRequestBody(req, rsp)
+    } catch {
+      case e: Exception =>
+        CommonMetrics.compareExceptions.mark()
+        logger.error("Unhandled exception: " + e.getMessage, e)
+        throw e
+    } finally {
+      ctx.stop()
+    }
+  }
+
+  private def internalHandleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
     val params = req.getParams
     val returnFields = new SolrReturnFields(req)
     rsp.setReturnFields(returnFields)
@@ -131,13 +148,18 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val (sortedResults, sourceFieldList, targetFieldList, fromCache) = cachedResults match {
       case None => {
-        val paramsVector = ParVector(sourceParams, targetParams)
-        paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
-        val gatherInfoResults = paramsVector.map(qp => gatherInfo(req, rsp, qp))
-        val sourceInfo = gatherInfoResults(0)
-        val targetInfo = gatherInfoResults(1)
-        (compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric),
-          sourceInfo.fieldList, targetInfo.fieldList, false)
+        val ctx = CommonMetrics.uncachedCompareTime.time()
+        try {
+          val paramsVector = ParVector(sourceParams, targetParams)
+          paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
+          val gatherInfoResults = paramsVector.map(qp => gatherInfo(req, rsp, qp))
+          val sourceInfo = gatherInfoResults(0)
+          val targetInfo = gatherInfoResults(1)
+          (compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric),
+            sourceInfo.fieldList, targetInfo.fieldList, false)
+        } finally {
+          ctx.stop()
+        }
       }
       case Some(cv) => {
         (cv.results, cv.sourceFieldList, cv.targetFieldList, true)
@@ -150,71 +172,76 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       cache.put(elem)
     }
 
-    val results = sortedResults.drop(start).take(rows)
-    val totalResultCount = sortedResults.length
+    val timer = CommonMetrics.resultsFormattingTime.time()
+    try {
+      val results = sortedResults.drop(start).take(rows)
+      val totalResultCount = sortedResults.length
 
-    val searcher = req.getSearcher
-    val reader = searcher.getIndexReader
+      val searcher = req.getSearcher
+      val reader = searcher.getIndexReader
 
-    def processResult(result: CompareResult, sourceIfTrue: Boolean, populate: DocFields) = {
-      val (docId, fieldList) = sourceIfTrue match {
-        case true =>
-          (result.pair.sourceDoc, sourceFieldList)
-        case false =>
-          (result.pair.targetDoc, targetFieldList)
-      }
-
-      val doc = reader.document(docId)
-      var found = 0
-      fieldList.foreach { fieldName =>
-        val fieldValue = doc.get(fieldName)
-        if (fieldValue != null) {
-          found += 1
-          populate.put(fieldName, fieldValue)
+      def processResult(result: CompareResult, sourceIfTrue: Boolean, populate: DocFields) = {
+        val (docId, fieldList) = sourceIfTrue match {
+          case true =>
+            (result.pair.sourceDoc, sourceFieldList)
+          case false =>
+            (result.pair.targetDoc, targetFieldList)
         }
+
+        val doc = reader.document(docId)
+        var found = 0
+        fieldList.foreach { fieldName =>
+          val fieldValue = doc.get(fieldName)
+          if (fieldValue != null) {
+            found += 1
+            populate.put(fieldName, fieldValue)
+          }
+        }
+
+        found
       }
 
-      found
+      val matches = new TesseraeMatches
+      results.foreach { result =>
+        val m = new TesseraeMatch
+        m.put("score", new java.lang.Double(result.score))
+        m.put("distance", new java.lang.Double(result.distance))
+
+        val terms = new TermList
+        result.commonTerms.toList.sorted.foreach { term =>
+          terms.add(term)
+        }
+
+        m.put("terms", terms)
+
+        val sdoc = new TesseraeDoc
+        val tdoc = new TesseraeDoc
+
+        val sourceFields = new DocFields
+        if (processResult(result, sourceIfTrue=true, sourceFields) > 0) {
+          sdoc.put("fields", sourceFields)
+        }
+
+        val targetFields = new DocFields
+        if (processResult(result, sourceIfTrue=false, targetFields) > 0) {
+          tdoc.put("fields", targetFields)
+        }
+
+        m.put("source", sdoc)
+        m.put("target", tdoc)
+
+        matches.add(m)
+      }
+
+      rsp.add("matchTotal", totalResultCount)
+      rsp.add("matchCount", results.length)
+      rsp.add("matchOffset", start)
+
+      rsp.add("matches", matches)
+      rsp.add("cached", fromCache)
+    } finally {
+      timer.stop()
     }
-
-    val matches = new TesseraeMatches
-    results.foreach { result =>
-      val m = new TesseraeMatch
-      m.put("score", new java.lang.Double(result.score))
-      m.put("distance", new java.lang.Double(result.distance))
-
-      val terms = new TermList
-      result.commonTerms.toList.sorted.foreach { term =>
-        terms.add(term)
-      }
-
-      m.put("terms", terms)
-
-      val sdoc = new TesseraeDoc
-      val tdoc = new TesseraeDoc
-
-      val sourceFields = new DocFields
-      if (processResult(result, sourceIfTrue=true, sourceFields) > 0) {
-        sdoc.put("fields", sourceFields)
-      }
-
-      val targetFields = new DocFields
-      if (processResult(result, sourceIfTrue=false, targetFields) > 0) {
-        tdoc.put("fields", targetFields)
-      }
-
-      m.put("source", sdoc)
-      m.put("target", tdoc)
-
-      matches.add(m)
-    }
-
-    rsp.add("matchTotal", totalResultCount)
-    rsp.add("matchCount", results.length)
-    rsp.add("matchOffset", start)
-
-    rsp.add("matches", matches)
-    rsp.add("cached", fromCache)
   }
 
   private def getMetric(distanceMetric: DistanceMetrics.Value, maxDistance: Int): Distance = {
@@ -458,7 +485,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
 
     val secondParam: java.util.List[org.apache.lucene.search.Query] = null
-    val listAndSet = searcher.getDocListAndSet(query, secondParam, null, 0, 10)
+    val listAndSet = searcher.getDocListAndSet(query, secondParam, null, 0, 100000)
     val dlit = listAndSet.docSet.iterator()
 
     var termInfo: QueryTermInfo = Map.empty
@@ -494,7 +521,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   }
 
   private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {
-    var text: BytesRef = termsEnum.next()
+    var rawText: BytesRef = termsEnum.next()
     var dpEnum: DocsAndPositionsEnum = null
     var positions: TermPositionsList = Nil
     var counts: TermCountMap = Map.empty
@@ -505,9 +532,23 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     // as it is currently, this might pick up the noun, this might pick up the verb.
     var knownPositions: Set[Int] = Set.empty
 
-    while(text != null) {
-      val term = text.utf8ToString
+    while(rawText != null) {
+      val posInfo = PartOfSpeech.unapply(rawText.utf8ToString)
+      val term = posInfo.text
       val freq = termsEnum.totalTermFreq.toInt
+
+      if (logger.isInfoEnabled) {
+        if (PartOfSpeech.isKeyword(posInfo)) {
+          logger.info("Keyword: " + term)
+        } else if (PartOfSpeech.isNoun(posInfo)) {
+          logger.info("Noun: " + term)
+        } else if (PartOfSpeech.isVerb(posInfo)) {
+          logger.info("Verb: " + term)
+        } else {
+          logger.info("Unknown: " + term)
+        }
+      }
+
       //var termType: Option[Attribute] = None
 
       dpEnum = termsEnum.docsAndPositions(null, dpEnum)
@@ -527,7 +568,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
         }
       }
 
-      text = termsEnum.next()
+      rawText = termsEnum.next()
     }
 
     DocumentTermInfo(docId, counts, positions)
