@@ -23,6 +23,59 @@ fi
 [ -d /vagrant ] || die "Missing directory: /vagrant"
 cd /vagrant || die "Can't cd to /vagrant"
 
+echo "Unpacking archives (sorry, saves space on the image)..."
+
+pushd /usr/share >/dev/null 2>&1
+echo " * emacs.tar.xz"
+[ -f emacs.tar.xz ] && sudo /bin/bash -c "xzcat emacs.tar.xz | tar -C /usr/share -xpf -" || die "extraction failed: emacs.tar.xz"
+[ -f emacs.tar.xz ] && sudo rm -f emacs.tar.xz || die "rm failed: emacs.tar.xz"
+echo "     => ok"
+echo " * vim.tar.xz"
+[ -f vim.tar.xz ] && sudo /bin/bash -c "xzcat vim.tar.xz | tar -C /usr/share -xpf -" || die "extraction failed: vim.tar.xz"
+[ -f vim.tar.xz ] && sudo rm -f vim.tar.xz || die "rm failed: vim.tar.xz"
+echo "     => ok"
+echo " * man.tar.xz"
+[ -f man.tar.xz ] && sudo /bin/bash -c "xzcat man.tar.xz | tar -C /usr/share -xpf -" || die "extraction failed: man.tar.xz"
+[ -f man.tar.xz ] && sudo rm -f man.tar.xz || die "rm failed: man.tar.xz"
+echo "     => ok"
+echo " * nltk_data.tar.xz"
+[ -f nltk_data.tar.xz ] && sudo /bin/bash -c "xzcat nltk_data.tar.xz | tar -C /usr/share -xpf -" || die "extraction failed: nltk_data.tar.xz"
+[ -f nltk_data.tar.xz ] && sudo rm -f nltk_data.tar.xz || die "rm failed: nltk_data.tar.xz"
+echo "     => ok"
+popd >/dev/null 2>&1
+pushd /opt >/dev/null 2>&1
+echo " * java.tar.xz"
+[ -f java.tar.xz ] && sudo /bin/bash -c "xzcat java.tar.xz | tar -C /opt -xpf -" || die "extraction failed: java.tar.xz"
+[ -f java.tar.xz ] && sudo rm -f java.tar.xz || die "rm failed: java.tar.xz"
+echo "     => ok"
+echo " * data.tar.xz"
+[ -f data.tar.xz ] && sudo /bin/bash -c "xzcat data.tar.xz | tar -C /opt -xpf -" || die "extraction failed: data.tar.xz"
+[ -f data.tar.xz ] && sudo rm -f data.tar.xz || die "rm failed: data.tar.xz"
+echo "     => ok"
+popd >/dev/null 2>&1
+pushd /home/tesserae >/dev/null 2>&1
+echo " * ivy2.tar.xz"
+[ -f ivy2.tar.xz ] && sudo /bin/bash -c "xzcat ivy2.tar.xz | tar -C /home/tesserae -xpf -" || die "extraction failed: ivy2.tar.xz"
+[ -f ivy2.tar.xz ] && sudo /bin/bash -c "xzcat ivy2.tar.xz | tar -C /home/vagrant -xpf -" || die "extraction failed: ivy2.tar.xz"
+[ -f ivy2.tar.xz ] && sudo /bin/bash -c "xzcat ivy2.tar.xz | tar -C /root -xpf -" || die "extraction failed: ivy2.tar.xz"
+[ -d .ivy2 ] && sudo chown -R tesserae:tesserae .ivy2 || die "chown failed: .ivy2"
+[ -d /home/vagrant/.ivy2 ] && sudo chown -R vagrant:vagrant /home/vagrant/.ivy2
+sudo /bin/bash -c "[ -d /root/.ivy2 ] && sudo chown -R root:root /root/.ivy2 || exit 1" || die "chown failed: .sbt"
+[ -f ivy2.tar.xz ] && sudo rm -f ivy2.tar.xz || die "rm failed: ivy2.tar.xz"
+echo "     => ok"
+echo " * sbt.tar.xz"
+[ -f sbt.tar.xz ] && sudo /bin/bash -c "xzcat sbt.tar.xz | tar -C /home/tesserae -xpf -" || die "extraction failed: sbt.tar.xz"
+[ -f sbt.tar.xz ] && sudo /bin/bash -c "xzcat sbt.tar.xz | tar -C /home/vagrant -xpf -" || die "extraction failed: sbt.tar.xz"
+[ -f sbt.tar.xz ] && sudo /bin/bash -c "xzcat sbt.tar.xz | tar -C /root -xpf -" || die "extraction failed: sbt.tar.xz"
+[ -d .sbt ] && sudo chown -R tesserae:tesserae .sbt || die "chown failed: .sbt"
+[ -d /home/vagrant/.sbt ] && sudo chown -R vagrant:vagrant /home/vagrant/.sbt || die "chown failed: .sbt"
+sudo /bin/bash -c "[ -d /root/.sbt ] && sudo chown -R root:root /root/.sbt || exit 1" || die "chown failed: .sbt"
+[ -f sbt.tar.xz ] && sudo rm -f sbt.tar.xz || die "rm failed: sbt.tar.xz"
+echo "     => ok"
+popd >/dev/null 2>&1
+
+[ -f ~/.bash_local ] && . ~/.bash_local
+
 [ -d $CATALINA_HOME ] || die "Missing directory: $CATALINA_HOME"
 sudo chown -R tesserae:tesserae "$CATALINA_HOME"
 sudo rm -f "$CATALINA_HOME/logs/*"

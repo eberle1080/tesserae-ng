@@ -22,4 +22,5 @@ object CommonMetrics {
   lazy val uncachedCompareTime = metrics.timer(name(getClass, "uncached-compare-time"))
   lazy val resultsFormattingTime = metrics.timer(name(getClass, "result-formatting-time"))
   lazy val compareExceptions = metrics.meter(name(getClass, "compare-exceptions"))
+  lazy val csvParseTime = metrics.timer(name(getClass, "csv-parse-time"))
 }
