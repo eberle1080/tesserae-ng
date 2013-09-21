@@ -74,6 +74,7 @@ sudo /bin/bash -c "[ -d /root/.sbt ] && sudo chown -R root:root /root/.sbt || ex
 echo "     => ok"
 popd >/dev/null 2>&1
 
+sudo sync
 [ -f ~/.bash_local ] && . ~/.bash_local
 
 [ -d $CATALINA_HOME ] || die "Missing directory: $CATALINA_HOME"
@@ -97,7 +98,38 @@ PYSOLR_DEST="/usr/local/lib/python2.7/dist-packages"
 sudo rm -f "$PYSOLR_DEST/pysolr.py" || die "Unable to remove buggy pysolr.py"
 sudo install -o root -g staff -m 644 -t "$PYSOLR_DEST" pysolr.py || die "install failed: pysolr.py"
 
+echo "Configuring nginx..."
 cd /vagrant
+[ -f conf/nginx-default ] || die "Missing file: conf/nginx-default"
+sudo cp -f conf/nginx-default /etc/nginx/sites-available/default || die "cp failed: conf/nginx-default"
+sudo chmod 644 /etc/nginx/sites-available/default
+sudo chown root:root /etc/nginx/sites-available/default
+sudo /etc/init.d/nginx reload
+
+echo "Setting up Graphite..."
+[ -f conf/carbon.conf ] || die "Missing file: conf/carbon.conf"
+sudo install -o root -g root -m 644 -t "/opt/graphite/conf" conf/carbon.conf || die "install failed: conf/carbon.conf"
+[ -f conf/storage-schemas.conf ] || die "Missing file: conf/storage-schemas.conf"
+sudo install -o root -g root -m 644 -t "/opt/graphite/conf" conf/storage-schemas.conf || die "install failed: conf/storage-schemas.conf"
+[ -f conf/local_settings.py ] || die "Missing file: conf/local_settings.py"
+sudo install -o root -g root -m 644 -t "/opt/graphite/webapp/graphite" conf/local_settings.py || die "install failed: conf/local_settings.py"
+sudo chown -R tesserae:tesserae /opt/graphite
+
+echo "Initializing Graphite database..."
+[ -f scripts/init_graphite.sh ] || die "Missing file: scripts/init_graphite.sh"
+sudo scripts/init_graphite.sh || die "init_graphite.sh failed"
+
+echo "Installing Graphite uWSGI startup scripts..."
+[ -f supervisor/graphite.conf ] || die "Missing file: supervisor/graphite.conf"
+[ -f supervisor/graphite.sh ] || die "Missing file: supervisor/graphite.sh"
+sudo mkdir -p /var/log/supervisor/graphite
+sudo chown tesserae:tesserae /var/log/supervisor/graphite
+sudo cp supervisor/graphite.conf /etc/supervisor/conf.d/graphite.conf || die "cp failed"
+sudo install -o root -g root -m 755 -t "/usr/local/sbin" supervisor/graphite.sh
+
+echo "Starting Graphite uWSGI web server..."
+sudo supervisorctl update
+
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 
@@ -192,7 +224,7 @@ echo "Initializing Django database and index..."
 [ -f scripts/init_db.sh ] || die "Missing file: scripts/init_db.sh"
 sudo scripts/init_db.sh || die "init_db.sh failed"
 
-echo "Installing uWSGI startup scripts..."
+echo "Installing Tesserae uWSGI startup scripts..."
 [ -f supervisor/tesserae-ng.conf ] || die "Missing file: supervisor/tesserae-ng.conf"
 [ -f supervisor/tesserae-ng.sh ] || die "Missing file: supervisor/tesserae-ng.sh"
 sudo mkdir -p /var/log/supervisor/tesserae-ng
@@ -200,7 +232,7 @@ sudo chown tesserae:tesserae /var/log/supervisor/tesserae-ng
 sudo cp supervisor/tesserae-ng.conf /etc/supervisor/conf.d/tesserae-ng.conf || die "cp failed"
 sudo install -o root -g root -m 755 -t "/usr/local/sbin" supervisor/tesserae-ng.sh
 
-echo "Starting uWSGI web server..."
+echo "Starting Tesserae uWSGI web server..."
 sudo supervisorctl update
 
 echo "Poking a few holes in the firewall..."

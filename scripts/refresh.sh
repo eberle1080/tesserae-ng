@@ -37,6 +37,13 @@ LIB_DIR="$CATALINA_HOME/webapps/solr/WEB-INF/lib"
 [ -d "$MAIN_LIB_DIR" ] || die "Missing directory: $MAIN_LIB_DIR"
 [ -d "$BIN_DIR" ] || die "Missing directory: $BIN_DIR"
 
+echo "Reloading nginx configuration..."
+[ -f conf/nginx-default ] || die "Missing file: conf/nginx-default"
+sudo cp -f conf/nginx-default /etc/nginx/sites-available/default || die "cp failed: conf/nginx-default"
+sudo chmod 644 /etc/nginx/sites-available/default
+sudo chown root:root /etc/nginx/sites-available/default
+sudo /etc/init.d/nginx reload
+
 echo "Stopping uWSGI web server..."
 supervisorctl stop tesserae-ng || die "Unable to stop uWSGI server"
 

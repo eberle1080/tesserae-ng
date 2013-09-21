@@ -1,0 +1,98 @@
+server {
+    listen 80;
+
+    server_name  tesserae.tesserae.org;
+
+    access_log  /var/log/nginx/tesserae-ng.access.log;
+    root   /home/tesserae/website;
+
+    # serve directly - analogous for static/staticfiles
+    location /media/ {
+        # if asset versioning is used
+        if ($query_string) {
+            expires max;
+        }
+    }
+
+    location = /favicon.ico {
+        rewrite "/favicon.ico" /media/img/favicon.ico;
+    }
+
+    location /admin/media/ {
+        root /usr/local/lib/python2.7/dist-packages/django/contrib;
+    }
+
+    location /static/admin/ {
+        root /usr/local/lib/python2.7/dist-packages/django/contrib/admin;
+    }
+
+    location /graphite {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /render {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /cli {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /composer {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /metrics {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /browser {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /account {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /dashboard {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /whitelist {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /content {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /graphlot {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /version {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location /events {
+        uwsgi_pass unix:///tmp/graphite.sock;
+        include uwsgi_params;
+    }
+
+    location / {
+        uwsgi_pass unix:///tmp/tesserae-ng.sock;
+        include uwsgi_params;
+    }
+}
