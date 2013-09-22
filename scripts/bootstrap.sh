@@ -111,9 +111,16 @@ echo "Setting up Graphite..."
 sudo install -o root -g root -m 644 -t "/opt/graphite/conf" conf/carbon.conf || die "install failed: conf/carbon.conf"
 [ -f conf/storage-schemas.conf ] || die "Missing file: conf/storage-schemas.conf"
 sudo install -o root -g root -m 644 -t "/opt/graphite/conf" conf/storage-schemas.conf || die "install failed: conf/storage-schemas.conf"
-[ -f conf/local_settings.py ] || die "Missing file: conf/local_settings.py"
-sudo install -o root -g root -m 644 -t "/opt/graphite/webapp/graphite" conf/local_settings.py || die "install failed: conf/local_settings.py"
 sudo chown -R tesserae:tesserae /opt/graphite
+
+echo "Installing Carbon Cache startup scripts..."
+sudo mkdir -p /var/log/supervisor/carbon-cache
+[ -d supervisor ] || die "Missing directory: supervisor"
+[ -f supervisor/carbon-cache.conf ] || die "Missing file: supervisor/carbon-cache.conf"
+sudo cp supervisor/carbon-cache.conf /etc/supervisor/conf.d/carbon-cache.conf || die "cp failed"
+
+echo "Starting Carbon Cache in the background..."
+sudo supervisorctl update || die "start failed"
 
 cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
