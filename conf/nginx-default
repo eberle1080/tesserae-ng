@@ -14,6 +14,15 @@ server {
         }
     }
 
+    location /media/graphite/ {
+        # if asset versioning is used
+        rewrite  ^/media/graphite/(.*)$  /$1  break;
+        root /opt/graphite/webapp/content;
+        if ($query_string) {
+            expires max;
+        }
+    }
+
     location = /favicon.ico {
         rewrite "/favicon.ico" /media/img/favicon.ico;
     }
@@ -24,71 +33,6 @@ server {
 
     location /static/admin/ {
         root /usr/local/lib/python2.7/dist-packages/django/contrib/admin;
-    }
-
-    location /graphite {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /render {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /cli {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /composer {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /metrics {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /browser {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /account {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /dashboard {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /whitelist {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /content {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /graphlot {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /version {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
-    }
-
-    location /events {
-        uwsgi_pass unix:///tmp/graphite.sock;
-        include uwsgi_params;
     }
 
     location / {

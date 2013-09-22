@@ -1,9 +1,13 @@
 # Django settings for website project.
 
+import sys
+import os
 import djcelery
+
+from os.path import abspath, dirname, join, exists
 djcelery.setup_loader()
 
-DEBUG = False
+DEBUG = True
 TEMPLATE_DEBUG = DEBUG
 
 ADMINS = (
@@ -161,7 +165,7 @@ TEMPLATE_DIRS = (
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-    '/home/tesserae/website/templates/default'
+    '/home/tesserae/website/templates/default',
 )
 
 INSTALLED_APPS = (
@@ -176,6 +180,16 @@ INSTALLED_APPS = (
     'haystack',
     'celery_haystack',
     'website.tesserae_ng',
+    'website.graphite.metrics',
+    'website.graphite.render',
+    'website.graphite.cli',
+    'website.graphite.browser',
+    'website.graphite.composer',
+    'website.graphite.account',
+    'website.graphite.dashboard',
+    'website.graphite.whitelist',
+    'website.graphite.events',
+    'tagging',
     'djcelery',
     'south',
     'debug_toolbar',
@@ -241,3 +255,64 @@ LOGGING = {
         },
     }
 }
+
+# Graphite settings
+
+try:
+    import rrdtool
+except ImportError:
+    rrdtool = False
+
+GRAPHITE_ROOT = '/opt/graphite'
+CONF_DIR = '/opt/graphite/conf'
+STORAGE_DIR = '/opt/graphite/storage'
+CONTENT_DIR = '/opt/graphite/webapp/content'
+CSS_DIR = join(CONTENT_DIR, 'css')
+CONF_DIR = join(GRAPHITE_ROOT, 'conf')
+DASHBOARD_CONF = join(CONF_DIR, 'dashboard.conf')
+GRAPHTEMPLATES_CONF = join(CONF_DIR, 'graphTemplates.conf')
+STORAGE_DIR = join(GRAPHITE_ROOT, 'storage')
+WHITELIST_FILE = join(STORAGE_DIR, 'lists', 'whitelist')
+INDEX_FILE = join(STORAGE_DIR, 'index')
+LOG_DIR = join(STORAGE_DIR, 'log', 'webapp')
+WHISPER_DIR = join(STORAGE_DIR, 'whisper/')
+RRD_DIR = join(STORAGE_DIR, 'rrd/')
+
+if rrdtool and exists(RRD_DIR):
+    DATA_DIRS = [WHISPER_DIR, RRD_DIR]
+else:
+    DATA_DIRS = [WHISPER_DIR]
+
+CLUSTER_SERVERS = []
+WEB_DIR = dirname( abspath(__file__) )
+WEBAPP_DIR = dirname(WEB_DIR)
+THIRDPARTY_DIR = join(WEB_DIR, 'thirdparty')
+sys.path.append(THIRDPARTY_DIR)
+
+LOGIN_URL = '/graphite/account/login'
+
+MEMCACHE_HOSTS = []
+DEFAULT_CACHE_DURATION = 60 #metric data and graphs are cached for one minute by default
+LOG_CACHE_PERFORMANCE = False
+
+REMOTE_STORE_FETCH_TIMEOUT = 6  
+REMOTE_STORE_FIND_TIMEOUT = 2.5 
+REMOTE_STORE_RETRY_DELAY = 60   
+REMOTE_FIND_CACHE_DURATION = 300
+
+REMOTE_RENDERING = False #if True, rendering is delegated to RENDERING_HOSTS
+RENDERING_HOSTS = []
+REMOTE_RENDER_CONNECT_TIMEOUT = 1.0
+LOG_RENDERING_PERFORMANCE = False
+
+CARBONLINK_HOSTS = ["127.0.0.1:7002"]
+CARBONLINK_TIMEOUT = 1.0
+SMTP_SERVER = "localhost"
+DOCUMENTATION_URL = "http://graphite.readthedocs.org/"
+ALLOW_ANONYMOUS_CLI = True
+LOG_METRIC_ACCESS = False
+LEGEND_MAX_ITEMS = 10
+USE_LDAP_AUTH = False
+
+USE_REMOTE_USER_AUTHENTICATION = False
+FLUSHRRDCACHED = ''

@@ -1,0 +1,64 @@
+<html>
+  <head>
+    <title>Graphite Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="/media/graphite/js/ext/resources/css/ext-all.css"/>
+    <link rel="stylesheet" type="text/css" href="/media/graphite/css/dashboard.css"/>
+
+    <script type="text/javascript">
+    // Be overly cautious to prevent an unlikely XSS (See the below link rule 3.1):
+    // https://www.owasp.org/index.php/XSS_%28Cross_Site_Scripting%29_Prevention_Cheat_Sheet
+    var schemes = JSON.parse('{{ schemes_json|safe }}');
+    var UI_CONFIG = JSON.parse('{{ ui_config_json|safe }}');
+    var CONTEXT_FIELD_WIDTH = 220;
+    var AUTOCOMPLETE_DELAY = UI_CONFIG.autocomplete_delay;
+    var FINDER_QUERY_DELAY = 100;
+    var NEW_DASHBOARD_REMOVE_GRAPHS = false;
+
+    var RESIZE_ICON   = '/media/graphite/js/ext/examples/shared/icons/fam/cog_edit.png';
+    var REMOVE_ICON   = '/media/graphite/js/ext/examples/shared/icons/fam/cross.gif';
+    var REFRESH_ICON  = '/media/graphite/js/ext/examples/shared/icons/fam/table_refresh.png';
+    var SHARE_ICON    = '/media/graphite/js/ext/examples/shared/icons/fam/application_go.png';
+    var CALENDAR_ICON = '/media/graphite/js/ext/resources/images/default/shared/calendar.gif';
+    var CLOCK_ICON    = '/media/graphite/img/clock_16.png';
+    var HELP_ICON     = '/media/graphite/js/ext/examples/shared/icons/fam/information.png';
+
+    {% if initialState %}
+    var initialState = "{{ initialState|escapejs }}";
+    {% else %}
+    var initialState = null;
+    {% endif %}
+
+    {% if initialError %}
+    var initialError = "{{ initialError|escapejs }}";
+    {% else %}
+    var initialError = null;
+    {% endif %}
+
+    {% if querystring %}
+    var queryString = JSON.parse('{{ querystring|safe }}');
+    {% endif %}
+    </script>
+
+    <!-- Theme overrides -->
+    <link rel="stylesheet" type="text/css" href="/media/graphite/css/dashboard-{{ theme }}.css" />
+
+    <script type="text/javascript" src="/media/graphite/js/ext/adapter/ext/ext-base{% if jsdebug %}-debug{% endif %}.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/ext/ext-all{% if jsdebug %}-debug{% endif %}.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/ext/ux/DataViewTransition.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/composer_widgets.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/dashboard.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/ace/ace.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/ace/mode-json.js"></script>
+    <script type="text/javascript" src="/media/graphite/js/ace/theme-textmate.js"></script>
+
+    <script type="text/javascript">
+    Ext.BLANK_IMAGE_URL = '/media/graphite/js/ext/resources/images/default/s.gif';
+    Ext.QuickTips.init();
+    Ext.onReady(initDashboard);
+    </script> 
+
+  </head>
+  <body>
+    <div id='merge'>Drop To Merge</div>
+  </body>
+</html>

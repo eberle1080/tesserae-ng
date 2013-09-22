@@ -37,12 +37,12 @@ LIB_DIR="$CATALINA_HOME/webapps/solr/WEB-INF/lib"
 [ -d "$MAIN_LIB_DIR" ] || die "Missing directory: $MAIN_LIB_DIR"
 [ -d "$BIN_DIR" ] || die "Missing directory: $BIN_DIR"
 
-echo "Reloading nginx configuration..."
+echo "Updating nginx configuration..."
 [ -f conf/nginx-default ] || die "Missing file: conf/nginx-default"
-sudo cp -f conf/nginx-default /etc/nginx/sites-available/default || die "cp failed: conf/nginx-default"
-sudo chmod 644 /etc/nginx/sites-available/default
-sudo chown root:root /etc/nginx/sites-available/default
-sudo /etc/init.d/nginx reload
+cp -f conf/nginx-default /etc/nginx/sites-available/default || die "cp failed: conf/nginx-default"
+chmod 644 /etc/nginx/sites-available/default
+chown root:root /etc/nginx/sites-available/default
+/etc/init.d/nginx reload
 
 echo "Stopping uWSGI web server..."
 supervisorctl stop tesserae-ng || die "Unable to stop uWSGI server"
@@ -59,8 +59,8 @@ cd patches || die "Can't cd to patches"
 echo "Patching a few files..."
 
 PYSOLR_DEST="/usr/local/lib/python2.7/dist-packages"
-sudo rm -f "$PYSOLR_DEST/pysolr.py" || die "Unable to remove buggy pysolr.py"
-sudo install -o root -g staff -m 644 -t "$PYSOLR_DEST" pysolr.py || die "install failed: pysolr.py"
+rm -f "$PYSOLR_DEST/pysolr.py" || die "Unable to remove buggy pysolr.py"
+install -o root -g staff -m 644 -t "$PYSOLR_DEST" pysolr.py || die "install failed: pysolr.py"
 
 cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
@@ -88,10 +88,10 @@ cd /vagrant
 install -o tesserae -g tesserae -m 644 -t "$BIN_DIR" conf/setenv.sh || die "install failed: conf/setenv.sh"
 
 [ -f conf/ehcache.xml ] || die "Missing file: conf/ehcache.xml"
-sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/ehcache.xml || die "install failed: conf/ehcache.xml"
+install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/ehcache.xml || die "install failed: conf/ehcache.xml"
 
 [ -f conf/log4j.properties ] || die "Missing file: conf/log4j.properties"
-sudo install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/log4j.properties || die "install failed: conf/log4j.properties"
+install -o tesserae -g tesserae -m 644 -t "$MAIN_LIB_DIR" conf/log4j.properties || die "install failed: conf/log4j.properties"
 
 [ -d solr ] || die "Missing directory: solr"
 cd solr || die "can't cd to solr"
@@ -107,6 +107,13 @@ echo "Starting Tomcat in the background..."
 supervisorctl start tomcat || die "start failed"
 
 echo "Refreshing Django web root..."
+
+if [ ! -d /home/tesserae/website ]; then
+    mkdir /home/tesserae/website || die "mkdir failed: /home/tesserae/website"
+    chown tesserae:tesserae /home/tesserae/website || die "chown failed"
+    chmod 755 /home/tesserae/website || die "chmod failed"
+fi
+
 cd /vagrant
 [ -d website ] || die "Missing directory: website"
 cd website || die "Failed to cd to website"
@@ -127,11 +134,11 @@ done < <(find . -type f)
 
 cd /vagrant
 [ -f manage.py ] || die "Missing file: manage.py"
-sudo rm -f /home/tesserae/manage.py || die "rm failed"
-sudo install -o tesserae -g tesserae -m 755 -t "/home/tesserae" manage.py || die "install failed: manage.py"
+rm -f /home/tesserae/manage.py || die "rm failed"
+install -o tesserae -g tesserae -m 755 -t "/home/tesserae" manage.py || die "install failed: manage.py"
 
-sudo find /home/tesserae/website -type f -name '*.pyc' -print0 | sudo xargs -0 -n 1 rm -rf || die "rm failed"
-sudo find /home/tesserae/website -type f -name '*~' -print0 | sudo xargs -0 -n 1 rm -rf || die "rm failed"
+find /home/tesserae/website -type f -name '*.pyc' -print0 | xargs -0 -n 1 rm -rf || die "rm failed"
+find /home/tesserae/website -type f -name '*~' -print0 | xargs -0 -n 1 rm -rf || die "rm failed"
 
 echo "Cleaning Django logs..."
 find "/var/log/django" -type f -exec rm -f {} \;

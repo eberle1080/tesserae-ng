@@ -115,21 +115,7 @@ sudo install -o root -g root -m 644 -t "/opt/graphite/conf" conf/storage-schemas
 sudo install -o root -g root -m 644 -t "/opt/graphite/webapp/graphite" conf/local_settings.py || die "install failed: conf/local_settings.py"
 sudo chown -R tesserae:tesserae /opt/graphite
 
-echo "Initializing Graphite database..."
-[ -f scripts/init_graphite.sh ] || die "Missing file: scripts/init_graphite.sh"
-sudo scripts/init_graphite.sh || die "init_graphite.sh failed"
-
-echo "Installing Graphite uWSGI startup scripts..."
-[ -f supervisor/graphite.conf ] || die "Missing file: supervisor/graphite.conf"
-[ -f supervisor/graphite.sh ] || die "Missing file: supervisor/graphite.sh"
-sudo mkdir -p /var/log/supervisor/graphite
-sudo chown tesserae:tesserae /var/log/supervisor/graphite
-sudo cp supervisor/graphite.conf /etc/supervisor/conf.d/graphite.conf || die "cp failed"
-sudo install -o root -g root -m 755 -t "/usr/local/sbin" supervisor/graphite.sh
-
-echo "Starting Graphite uWSGI web server..."
-sudo supervisorctl update
-
+cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 
@@ -190,6 +176,8 @@ sudo cp -a website /home/tesserae/ || die "cp failed"
 sudo chown -R tesserae:tesserae /home/tesserae/website || die "chown failed"
 sudo find /home/tesserae/website -type f -name '*.pyc' -print0 | sudo xargs -0 -n 1 rm -rf || die "rm failed"
 sudo find /home/tesserae/website -type f -name '*~' -print0 | sudo xargs -0 -n 1 rm -rf || die "rm failed"
+
+cd /vagrant
 sudo mkdir -p /var/log/django
 sudo chown tesserae:tesserae /var/log/django
 
@@ -268,6 +256,7 @@ else
 fi
 
 touch /home/vagrant/.bootstrapped || die "can't touch this"
+sudo sync
 echo ''
 echo "All done."
 
