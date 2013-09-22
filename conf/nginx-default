@@ -7,17 +7,27 @@ server {
     root   /home/tesserae/website;
 
     # serve directly - analogous for static/staticfiles
-    location /media/ {
+
+    location /media/graphite/js/ext/ {
         # if asset versioning is used
+        rewrite  ^/media/graphite/js/ext/(.*)$  /$1  break;
+        root /opt/graphite/webapp/content/js/ext;
         if ($query_string) {
             expires max;
         }
     }
 
-    location /media/graphite/ {
+    location /media/graphite/img/ {
         # if asset versioning is used
-        rewrite  ^/media/graphite/(.*)$  /$1  break;
-        root /opt/graphite/webapp/content;
+        rewrite  ^/media/graphite/img/(.*)$  /$1  break;
+        root /opt/graphite/webapp/content/img;
+        if ($query_string) {
+            expires max;
+        }
+    }
+
+    location /media/ {
+        # if asset versioning is used
         if ($query_string) {
             expires max;
         }

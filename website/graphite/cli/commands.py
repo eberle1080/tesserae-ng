@@ -77,7 +77,7 @@ def _create(request,window):
   w = window.replace('.', '_')
   #Basic window creation
   out += "%s_win = new Window('%s_win', {title: '%s',width: 350, height: 225, maximizable: false});\n" % (w,w,w)
-  out += "center = Builder.node( 'center', [Builder.node('img', {id: '%s_img',src: '/content/img/graphite.png'} )] );\n" % w
+  out += "center = Builder.node( 'center', [Builder.node('img', {id: '%s_img',src: '/media/graphite/img/graphite.png'} )] );\n" % w
   out += "%s_win.getContent().appendChild( center );\n" % w
   out += "%s_win.setDestroyOnClose();\n" % w
   out += "%s_win.showCenter();\n" % w
