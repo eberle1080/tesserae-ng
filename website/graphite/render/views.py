@@ -298,11 +298,11 @@ def delegateRendering(graphType, graphOptions):
         connection.timeout = settings.REMOTE_RENDER_CONNECT_TIMEOUT
       # Send the request
       try:
-        connection.request('POST','/render/local/', postData)
+        connection.request('POST','/graphite/render/local/', postData)
       except CannotSendRequest:
         connection = HTTPConnectionWithTimeout(server) #retry once
         connection.timeout = settings.REMOTE_RENDER_CONNECT_TIMEOUT
-        connection.request('POST', '/render/local/', postData)
+        connection.request('POST', '/graphite/render/local/', postData)
       # Read the response
       response = connection.getresponse()
       assert response.status == 200, "Bad response code %d from %s" % (response.status,server)

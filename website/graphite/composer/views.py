@@ -72,7 +72,7 @@ def mygraph(request):
         newGraph.save()
 
       except:
-        log.exception("Failed to create new MyGraph in /composer/mygraph/, graphName=%s" % graphName)
+        log.exception("Failed to create new MyGraph in /graphite/composer/mygraph/, graphName=%s" % graphName)
         return HttpResponse("Failed to save graph %s" % graphName)
 
     return HttpResponse("SAVED")

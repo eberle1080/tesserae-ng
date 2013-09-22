@@ -7,7 +7,7 @@ import djcelery
 from os.path import abspath, dirname, join, exists
 djcelery.setup_loader()
 
-DEBUG = True
+DEBUG = False
 TEMPLATE_DEBUG = DEBUG
 
 ADMINS = (
@@ -313,6 +313,7 @@ ALLOW_ANONYMOUS_CLI = True
 LOG_METRIC_ACCESS = False
 LEGEND_MAX_ITEMS = 10
 USE_LDAP_AUTH = False
+JAVASCRIPT_DEBUG = False
 
 USE_REMOTE_USER_AUTHENTICATION = False
 FLUSHRRDCACHED = ''
