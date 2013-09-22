@@ -241,6 +241,7 @@ echo "Poking a few holes in the firewall..."
 sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 8080 -m conntrack --ctstate NEW -j ACCEPT
 sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 9000 -m conntrack --ctstate NEW -j ACCEPT
 sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 9099 -m conntrack --ctstate NEW -j ACCEPT
+sudo iptables -A INPUT -i eth0 -p tcp -m tcp --dport 15672 -m conntrack --ctstate NEW -j ACCEPT
 
 echo "Saving firewall state..."
 sudo iptables-save > /etc/firewall.conf

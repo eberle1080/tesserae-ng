@@ -20,6 +20,7 @@ Vagrant.configure("2") do |config|
   config.vm.network :forwarded_port, guest: 8080, host: 8080, auto_correct: true
   config.vm.network :forwarded_port, guest: 9000, host: 9000, auto_correct: true
   config.vm.network :forwarded_port, guest: 9099, host: 9099, auto_correct: true
+  config.vm.network :forwarded_port, guest: 15672, host: 15672, auto_correct: true
 
   # The default image is best suited for the least-common denominator (which is
   # to say, i386 with one CPU and 1GB of memory). If you want the image to use
