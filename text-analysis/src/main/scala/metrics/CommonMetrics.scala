@@ -1,13 +1,27 @@
 package org.apache.solr.handler.tesserae.metrics
 
-import com.codahale.metrics.{JmxReporter, MetricRegistry}
+import com.codahale.metrics.{MetricFilter, JmxReporter, MetricRegistry}
+import com.codahale.metrics.graphite.{GraphiteReporter, Graphite}
 import MetricRegistry.name
+import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 object CommonMetrics {
   lazy val metrics: MetricRegistry = {
     val registry = new MetricRegistry
-    val reporter = JmxReporter.forRegistry(registry).build()
-    reporter.start()
+    val graphite = new Graphite(new InetSocketAddress("localhost", 2003))
+    val graphiteReporter = GraphiteReporter.forRegistry(registry).
+            prefixedWith("tesserae.solr.compare").
+            convertRatesTo(TimeUnit.SECONDS).
+            convertDurationsTo(TimeUnit.MILLISECONDS).
+            filter(MetricFilter.ALL).
+            build(graphite)
+
+    graphiteReporter.start(15, TimeUnit.SECONDS)
+
+    val jmxReporter = JmxReporter.forRegistry(registry).build()
+    jmxReporter.start()
+
     registry
   }
 

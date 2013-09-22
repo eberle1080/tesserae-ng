@@ -140,6 +140,13 @@ sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/com.typesafe.akka
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.typesafe/config/config-1.0.2.jar || die "install failed: config-1.0.0.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/net.sf.ehcache/ehcache-core/ehcache-core-2.6.6.jar || die "install failed: ehcache-core-2.6.6.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.metrics/metrics-core/metrics-core-3.0.1.jar || die "install failed: metrics-core-3.0.1"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.metrics/metrics-healthchecks/metrics-healthchecks-3.0.1.jar || die "install failed: metrics-healthchecks-3.0.1.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.metrics/metrics-ehcache/metrics-ehcache-3.0.1.jar || die "install failed: metrics-ehcache-3.0.1.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.metrics/metrics-graphite/metrics-graphite-3.0.1.jar || die "install failed: metrics-graphite-3.0.1.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.metrics/metrics-jvm/metrics-jvm-3.0.1.jar || die "install failed: metrics-jvm-3.0.1.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/org.fusesource.leveldbjni/leveldbjni-all/leveldbjni-all-1.7.jar || die "install failed: leveldbjni-all-1.7.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/net.sf.opencsv/opencsv/opencsv-2.3.jar || die "install failed: opencsv-2.3.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/joda-time/joda-time/joda-time-2.2.jar || die "install failed: joda-time-2.2.jar"
 
 echo "Installing main Solr extension jar..."
 cd ..

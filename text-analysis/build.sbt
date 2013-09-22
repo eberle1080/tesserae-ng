@@ -26,10 +26,6 @@ libraryDependencies += "com.codahale.metrics" % "metrics-jvm" % "3.0.1"
 
 libraryDependencies += "com.codahale.metrics" % "metrics-ehcache" % "3.0.1"
 
-libraryDependencies += "com.codahale.metrics" % "metrics-httpclient" % "3.0.1"
-
-libraryDependencies += "com.codahale.metrics" % "metrics-log4j" % "3.0.1"
-
 libraryDependencies += "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.7"
 
 libraryDependencies += "net.sf.opencsv" % "opencsv" % "2.3"
