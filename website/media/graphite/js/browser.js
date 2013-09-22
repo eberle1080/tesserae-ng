@@ -55,7 +55,7 @@ function createTreePanel(){
     id: 'GraphiteTree',
     text: "Graphite",
     loader: new Ext.tree.TreeLoader({
-      url: "../metrics/find/",
+      url: "/graphite/metrics/find/",
       requestMethod: "GET",
       listeners: {beforeload: setParams}
     })
@@ -78,7 +78,7 @@ function createTreePanel(){
       allowDrag: false,
       //listeners: {beforeexpand: reloadOnce},
       loader: new Ext.tree.TreeLoader({
-        url: "../browser/mygraph/",
+        url: "/graphite/browser/mygraph/",
         requestMethod: "GET",
         listeners: {beforeload: setParams}
       })
@@ -91,7 +91,7 @@ function createTreePanel(){
     text: "User Graphs",
     //listeners: {beforeexpand: reloadOnce},
     loader: new Ext.tree.TreeLoader({
-      url: "../browser/usergraph/",
+      url: "/graphite/browser/usergraph/",
       requestMethod: "GET",
       listeners: {beforeload: setParams}
     })
@@ -180,7 +180,7 @@ function sendSearchRequest (searchField, evt) {
     resultList.removeChild( resultList.childNodes[0] );
   }
   Ext.Ajax.request({
-    url: '../browser/search/',
+    url: '/graphite/browser/search/',
     method: 'POST',
     success: handleSearchResponse,
     failure: handleSearchFailure,
@@ -279,7 +279,7 @@ function sendCompleterRequest(evt, el) {
     return;
   }
   Ext.Ajax.request({
-    url: '../cli/autocomplete/',
+    url: '/graphite/cli/autocomplete/',
     method: 'GET',
     success: handleCompleterResponse,
     failure: handleCompleterFailure,

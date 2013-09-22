@@ -284,7 +284,7 @@ Object.extend(Object.extend(GraphiteSearchCompleter.prototype, Ajax.Autocomplete
 	 this.observer = setTimeout(this.myObserverEvent.bind(this), this.options.frequency*1000);
          return;
        case Event.KEY_RETURN:
-         //parent.content.location.href = "/composer?url=/graphite/render%3Ftarget=" + this.element.value;
+         //parent.content.location.href = "/graphite/composer?url=/graphite/render%3Ftarget=" + this.element.value;
 	 top.content.toggleTarget( this.element.value );
        case Event.KEY_ESC:
          this.hide();

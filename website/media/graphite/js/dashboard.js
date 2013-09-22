@@ -20,7 +20,7 @@ var NOT_EDITABLE = ['from', 'until', 'width', 'height', 'target', 'uniq', '_uniq
 var editor = null;
 
 var cookieProvider = new Ext.state.CookieProvider({
-  path: "/dashboard"
+  path: "/graphite/dashboard"
 });
 
 var NAV_BAR_REGION = cookieProvider.get('navbar-region') || 'north';
@@ -69,7 +69,7 @@ var ContextFieldValueRecord = Ext.data.Record.create([
 ]);
 
 var contextFieldStore = new Ext.data.JsonStore({
-  url: '/metrics/find/',
+  url: '/graphite/metrics/find/',
   root: 'metrics',
   idProperty: 'name',
   fields: ContextFieldValueRecord,
@@ -287,7 +287,7 @@ function initDashboard () {
       }),
       store: new Ext.data.JsonStore({
         method: 'GET',
-        url: '/metrics/find/',
+        url: '/graphite/metrics/find/',
         autoLoad: true,
         baseParams: {
           query: '',
@@ -736,7 +736,7 @@ function showHelp() {
     modal: true,
     width: 550,
     height: 300,
-    autoLoad: "/dashboard/help/"
+    autoLoad: "/graphite/dashboard/help/"
   });
   win.show();
 }
@@ -868,7 +868,7 @@ function metricTreeSelectorShow(pattern) {
   }
 
   var loader = new Ext.tree.TreeLoader({
-    url: '/metrics/find/',
+    url: '/graphite/metrics/find/',
     requestMethod: 'GET',
     listeners: {beforeload: setParams}
   });
@@ -1360,7 +1360,7 @@ function newFromSavedGraph() {
     expandable: true,
     allowDrag: false,
     loader: new Ext.tree.TreeLoader({
-      url: "../browser/usergraph/",
+      url: "/graphite/browser/usergraph/",
       requestMethod: "GET",
       listeners: {beforeload: setParams}
     })
@@ -1564,7 +1564,7 @@ function selectGraphSize() {
 function doShare() {
   if (dashboardName == null) {
     Ext.Ajax.request({
-      url: "/dashboard/create-temporary/",
+      url: "/graphite/dashboard/create-temporary/",
       method: 'POST',
       params: {
         state: Ext.encode( getState() )
@@ -1952,7 +1952,7 @@ function breakoutGraph(record) {
   }
 
   Ext.Ajax.request({
-    url: '/metrics/expand/',
+    url: '/graphite/metrics/expand/',
     params: {
       groupByExpr: '1',
       leavesOnly: '1',
@@ -2023,7 +2023,7 @@ function mailGraph(record) {
          handler: function(){
            if(contactForm.getForm().isValid()){
              contactForm.getForm().submit({
-               url: '/dashboard/email',
+               url: '/graphite/dashboard/email',
                waitMsg: 'Processing Request',
                success: function (contactForm, response) {
          console.log(response.result);
@@ -2307,7 +2307,7 @@ function saveDashboard() {
 
 function sendSaveRequest(name) {
   Ext.Ajax.request({
-    url: "/dashboard/save/" + name,
+    url: "/graphite/dashboard/save/" + name,
     method: 'POST',
     params: {
       state: Ext.encode( getState() )
@@ -2324,7 +2324,7 @@ function sendSaveRequest(name) {
 
 function sendLoadRequest(name) {
   Ext.Ajax.request({
-    url: "/dashboard/load/" + name,
+    url: "/graphite/dashboard/load/" + name,
     success: function (response) {
                var result = Ext.decode(response.responseText);
                if (result.error) {
@@ -2410,7 +2410,7 @@ function applyState(state) {
 
 function deleteDashboard(name) {
   Ext.Ajax.request({
-    url: "/dashboard/delete/" + name,
+    url: "/graphite/dashboard/delete/" + name,
     success: function (response) {
       var result = Ext.decode(response.responseText);
       if (result.error) {
@@ -2527,7 +2527,7 @@ function showDashboardFinder() {
   var dashboardsList;
   var queryField;
   var dashboardsStore = new Ext.data.JsonStore({
-    url: "/dashboard/find/",
+    url: "/graphite/dashboard/find/",
     method: 'GET',
     params: {query: "e"},
     fields: ['name'],
