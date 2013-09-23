@@ -19,9 +19,10 @@ import org.slf4j.LoggerFactory
 import collection.parallel.immutable.ParVector
 import collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
-import net.sf.ehcache.{Element, CacheManager, Ehcache}
+import net.sf.ehcache.{Element, Ehcache}
 import org.apache.solr.handler.tesserae.pos.PartOfSpeech
 import org.apache.solr.handler.tesserae.metrics.CommonMetrics
+import org.tesserae.EhcacheManager
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -31,16 +32,20 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   private lazy val logger = LoggerFactory.getLogger(getClass)
   private val DEFAULT_MAX_THREADS =
     Runtime.getRuntime.availableProcessors() + 1
-  private val DEFAULT_CACHE_NAME = "tesseraeCompare"
 
   private var maximumThreads = DEFAULT_MAX_THREADS
   private var workerPool: ForkJoinPool = null
-  private var ehcacheName: String = DEFAULT_CACHE_NAME
-  private lazy val ehcacheManager = CacheManager.getInstance
   private var cache: Ehcache = null
+  private var filterPositions = false
 
   override def init(args: NamedList[_]) {
     super.init(args)
+
+    args.get("filterPositions") match {
+      case null => // do nothing
+      case str: String => filterPositions = str.toBoolean
+      case b: Boolean => filterPositions = b
+    }
 
     val threadCount = args.get("threads")
     maximumThreads = threadCount match {
@@ -56,18 +61,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     workerPool = new ForkJoinPool(maximumThreads)
     logger.info("Initialized worker pool with a max of " + plural(maximumThreads, "thread", "threads"))
 
-    val ehcacheStr = args.get("cacheName")
-    ehcacheName = ehcacheStr match {
-      case null => DEFAULT_CACHE_NAME
-      case str: String => str
-    }
-
-    logger.info("Using cache `" + ehcacheName + "'")
-    cache = ehcacheManager.getEhcache(ehcacheName)
-    if (cache == null) {
-      logger.warn("Unable to find cache `" + ehcacheName + "', configuring a default one")
-      cache = ehcacheManager.addCacheIfAbsent(ehcacheName)
-    }
+    val ehcacheStr = args.get("cacheName").asInstanceOf[String]
+    cache = EhcacheManager.compareCache(Option(ehcacheStr))
 
     logger.info("Initialized Ehcache")
   }
@@ -501,8 +496,14 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val parvector = ParVector(jobs.toSeq :_*)
     parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
-    val mappedResults = parvector.map { case (docId, vec) =>
-      (docId, mapOneVector(reader, docId, vec.iterator(null), searchField))
+    val mappedResults = if (filterPositions) {
+      parvector.map { case (docId, vec) =>
+        (docId, mapOneVector(reader, docId, vec.iterator(null), searchField))
+      }
+    } else {
+      parvector.map { case (docId, vec) =>
+        (docId, mapOneVectorUnfiltered(reader, docId, vec.iterator(null), searchField))
+      }
     }
 
     mappedResults.toList.foreach { case (docId, dti) =>
@@ -533,10 +534,11 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     var knownPositions: Set[Int] = Set.empty
 
     while(rawText != null) {
-      val posInfo = PartOfSpeech.unapply(rawText.utf8ToString)
-      val term = posInfo.text
+      //val posInfo = PartOfSpeech.unapply(rawText.utf8ToString)
+      val term = rawText.utf8ToString
       val freq = termsEnum.totalTermFreq.toInt
 
+      /*
       if (logger.isInfoEnabled) {
         if (PartOfSpeech.isKeyword(posInfo)) {
           logger.info("Keyword: " + term)
@@ -548,6 +550,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
           logger.info("Unknown: " + term)
         }
       }
+      */
 
       //var termType: Option[Attribute] = None
 
@@ -566,6 +569,36 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
           val oldCount = counts.getOrElse(term, 0)
           counts += term -> (oldCount + 1)
         }
+      }
+
+      rawText = termsEnum.next()
+    }
+
+    DocumentTermInfo(docId, counts, positions)
+  }
+
+  private def mapOneVectorUnfiltered(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {
+    var rawText: BytesRef = termsEnum.next()
+    var dpEnum: DocsAndPositionsEnum = null
+    var positions: TermPositionsList = Nil
+    var counts: TermCountMap = Map.empty
+
+    while(rawText != null) {
+      val term = rawText.utf8ToString
+      val freq = termsEnum.totalTermFreq.toInt
+
+      dpEnum = termsEnum.docsAndPositions(null, dpEnum)
+      if (dpEnum == null) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "termsEnum.docsAndPositions returned null")
+      }
+
+      dpEnum.nextDoc()
+      for (i <- 0 until freq) {
+        val pos = dpEnum.nextPosition
+        val entry = TermPositionsListEntry(term, pos)
+        positions = entry :: positions
+        val oldCount = counts.getOrElse(term, 0)
+        counts += term -> (oldCount + 1)
       }
 
       rawText = termsEnum.next()

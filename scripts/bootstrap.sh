@@ -123,6 +123,24 @@ echo "Starting Carbon Cache in the background..."
 sudo supervisorctl update || die "start failed"
 
 cd /vagrant
+[ -d lexicon-ingest ] || die "Missing directory: lexicon-ingest"
+cd lexicon-ingest || die "Can't cd to lexicon-ingest"
+
+echo "Compiling Lexicon Ingest utility..."
+rm -rf target || die "rm failed"
+rm -rf lib_managed || die "rm failed"
+sbt -batch -no-colors one-jar publishLocal
+
+[ -d "target/scala-2.10" ] || die "Missing directory: target/scala-2.10"
+cd target/scala-2.10 || die "Can't cd to target/scala-2.10"
+
+echo "Installing Lexicon Ingest utility..."
+[ -f lexicon-ingest_2.10-1.0-one-jar.jar ] || die "Missing file: lexicon-ingest_2.10-1.0-one-jar.jar"
+sudo cp -f lexicon-ingest_2.10-1.0-one-jar.jar /opt/data/lexicon/lexicon-ingest.jar || die "cp failed: lexicon-ingest_2.10-1.0-one-jar.jar"
+sudo chown tesserae:tesserae /opt/data/lexicon/lexicon-ingest.jar || die "chown failed: /opt/data/lexicon/lexicon-ingest.jar"
+sudo chmod 0644 /opt/data/lexicon/lexicon-ingest.jar || due "chmod failed: /opt/data/lexicon/lexicon-ingest.jar"
+
+cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 
@@ -147,6 +165,7 @@ sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/com.codahale.m
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" bundles/org.fusesource.leveldbjni/leveldbjni-all/leveldbjni-all-1.7.jar || die "install failed: leveldbjni-all-1.7.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/net.sf.opencsv/opencsv/opencsv-2.3.jar || die "install failed: opencsv-2.3.jar"
 sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/joda-time/joda-time/joda-time-2.2.jar || die "install failed: joda-time-2.2.jar"
+sudo install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/org.tesserae/lexicon-ingest_2.10/lexicon-ingest_2.10-1.0.jar || die "install failed: lexicon-ingest_2.10-1.0.jar"
 
 echo "Installing main Solr extension jar..."
 cd ..
@@ -174,7 +193,15 @@ sudo chown -R tesserae:tesserae /home/tesserae/solr || die "chown failed"
 sudo find /home/tesserae/solr -type d -name data -print0 | sudo xargs -0 -n 1 rm -rf || die "rm failed"
 sudo find /home/tesserae/solr -type f -name '*~' -print0 | sudo xargs -0 -n 1 rm -f || die "rm failed"
 
+echo "Ingesting Latin lexicon..."
+cd /opt/data/lexicon || die "cd failed: /opt/data/lexicon"
+[ -f lexicon-ingest.jar ] || die "Missing file: lexicon-ingest.jar"
+[ -f la.lexicon.csv ] || die "Missing file: la.lexicon.csv"
+sudo /opt/java/bin/java -jar lexicon-ingest.jar --input=la.lexicon.csv --output=la.lexicon.db || die "ingest failed"
+sudo chown -R tesserae:tesserae la.lexicon.db
+
 echo "Installing Tomcat startup scripts..."
+cd /vagrant
 sudo mkdir -p /var/log/supervisor/tomcat
 [ -d supervisor ] || die "Missing directory: supervisor"
 [ -f supervisor/tomcat.conf ] || die "Missing file: supervisor/tomcat.conf"

@@ -63,6 +63,15 @@ rm -f "$PYSOLR_DEST/pysolr.py" || die "Unable to remove buggy pysolr.py"
 install -o root -g staff -m 644 -t "$PYSOLR_DEST" pysolr.py || die "install failed: pysolr.py"
 
 cd /vagrant
+[ -d lexicon-ingest ] || die "Missing directory: lexicon-ingest"
+cd lexicon-ingest || die "Can't cd to lexicon-ingest"
+
+echo "Compiling Lexicon Ingest utility..."
+rm -rf target || die "rm failed"
+rm -rf lib_managed || die "rm failed"
+sbt -batch -no-colors one-jar publishLocal
+
+cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 
@@ -73,6 +82,8 @@ sbt -batch -no-colors package || die "compilation failed"
 
 [ -d lib_managed ] || die "Missing directory: lib_managed"
 cd lib_managed
+
+install -o tesserae -g tesserae -m 644 -t "$LIB_DIR" jars/org.tesserae/lexicon-ingest_2.10/lexicon-ingest_2.10-1.0.jar || die "install failed: lexicon-ingest_2.10-1.0.jar"
 
 echo "Refreshing main Solr extension jar..."
 cd ..

@@ -4,6 +4,10 @@ version := "1.0"
 
 scalaVersion := "2.10.2"
 
+organization := "org.tesserae"
+
+libraryDependencies += "org.tesserae" %% "lexicon-ingest" % "1.0"
+
 libraryDependencies += "org.scala-lang" % "scala-library" % "2.10.2"
 
 libraryDependencies += "org.apache.solr" % "solr-core" % "4.4.0"
@@ -37,3 +41,7 @@ resolvers += "restlet" at "http://maven.restlet.org/"
 retrieveManaged := true
 
 seq(lsSettings :_*)
+
+javacOptions ++= Seq("-source", "1.7", "-target", "1.7")
+
+scalacOptions += "-optimise"

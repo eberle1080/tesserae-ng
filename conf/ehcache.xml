@@ -25,4 +25,14 @@
       timeToLiveSeconds="600"
       memoryStoreEvictionPolicy="FIFO"/>
 
+  <cache
+      name="latinLexicon"
+      maxEntriesLocalHeap="1000"
+      maxEntriesLocalDisk="5000"
+      eternal="false"
+      diskSpoolBufferSizeMB="20"
+      timeToIdleSeconds="900"
+      timeToLiveSeconds="1800"
+      memoryStoreEvictionPolicy="LFU"/>
+
 </ehcache>

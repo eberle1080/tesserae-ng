@@ -78,7 +78,7 @@
        <filter class="solr.LowerCaseFilterFactory"/>
        <filter class="org.apache.solr.analysis.LatinNumberConvertFilterFactory" strictMode="true"/> 
        <!--<filter class="solr.KeywordMarkerFilterFactory" protected="protwords.txt" />-->
-       <filter class="org.apache.solr.analysis.LatinStemFilterFactory" />
+       <filter class="org.apache.solr.analysis.lexicon.LatinLexiconStemFilterFactory" database="/opt/data/lexicon/la.lexicon.db" />
      </analyzer>
      <analyzer type="query">
        <tokenizer class="solr.StandardTokenizerFactory"/>
@@ -87,7 +87,7 @@
        <filter class="solr.LowerCaseFilterFactory"/>
        <filter class="org.apache.solr.analysis.LatinNumberConvertFilterFactory" strictMode="true"/> 
        <!--<filter class="solr.KeywordMarkerFilterFactory" protected="protwords.txt" />-->
-       <filter class="org.apache.solr.analysis.LatinStemFilterFactory" />
+       <filter class="org.apache.solr.analysis.lexicon.LatinLexiconStemFilterFactory" database="/opt/data/lexicon/la.lexicon.db" />
      </analyzer>
    </fieldType>
 
