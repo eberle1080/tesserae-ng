@@ -46,7 +46,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       case b: Boolean => filterPositions = b
     }
 
-    args.get("threads") match {
+    maximumThreads = args.get("threads") match {
       case null => DEFAULT_MAX_THREADS
       case str: String => str.toInt
       case i: Int => i

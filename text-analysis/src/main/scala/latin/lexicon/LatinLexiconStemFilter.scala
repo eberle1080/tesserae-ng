@@ -42,9 +42,16 @@ class LatinLexiconStemFilter(input: TokenStream, db: LatinLexiconDatabase) exten
 
     clearAttributes()
 
-    val normalized = String.valueOf(currentTokenBuffer, 0,  currentTokenLength).toLowerCase
-    val tok = db.lookup(normalized).getOrElse(CSVLine(normalized, "", normalized))
-    val stemmed = tok.stem
+    val normalizedA = String.valueOf(currentTokenBuffer, 0,  currentTokenLength).toLowerCase
+    val normalizedB = replaceVJ(normalizedA)
+
+    val tok = db.lookup(normalizedA).getOrElse {
+      db.lookup(normalizedB).getOrElse {
+        CSVLine(normalizedB, "", normalizedB)
+      }
+    }
+
+    val stemmed = replaceVJ(tok.stem)
 
     posIncAtt.setPositionIncrement(currentTokenPosition)
     termAtt.setEmpty().append(stemmed)
@@ -54,4 +61,7 @@ class LatinLexiconStemFilter(input: TokenStream, db: LatinLexiconDatabase) exten
 
     true
   }
+
+  private def replaceVJ(lowerCase: String) =
+    lowerCase.replaceAllLiterally("v", "u").replaceAllLiterally("j", "i")
 }
