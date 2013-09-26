@@ -38,6 +38,8 @@ libraryDependencies += "net.sf.opencsv" % "opencsv" % "2.3"
 
 resolvers += "restlet" at "http://maven.restlet.org/"
 
+// resolvers += "linter" at "http://hairyfotr.github.io/linteRepo/releases"
+
 retrieveManaged := true
 
 seq(lsSettings :_*)
@@ -45,3 +47,5 @@ seq(lsSettings :_*)
 javacOptions ++= Seq("-source", "1.7", "-target", "1.7")
 
 scalacOptions += "-optimise"
+
+// addCompilerPlugin("com.foursquare.lint" %% "linter" % "0.1-SNAPSHOT")

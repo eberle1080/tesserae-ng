@@ -69,13 +69,8 @@ trait DistanceMixin {
           entriesMap += entry.position -> entry.term
         case Some(priorTerm) =>
           val prLen = priorTerm.length
-          if (termLen > prLen) {
+          if ((termLen > prLen) || (termLen == prLen && entry.term.compareTo(priorTerm) > 0)) {
             entriesMap += entry.position -> entry.term
-          } else if (termLen == prLen) {
-            // choose alphabetically
-            if (entry.term.compareTo(priorTerm) > 0) {
-              entriesMap += entry.position -> entry.term
-            }
           } else {
             // leave the old one alone
           }

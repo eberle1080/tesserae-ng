@@ -20,7 +20,6 @@ import collection.parallel.immutable.ParVector
 import collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
 import net.sf.ehcache.{Element, Ehcache}
-import org.apache.solr.handler.tesserae.pos.PartOfSpeech
 import org.apache.solr.handler.tesserae.metrics.CommonMetrics
 import org.tesserae.EhcacheManager
 
@@ -47,8 +46,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       case b: Boolean => filterPositions = b
     }
 
-    val threadCount = args.get("threads")
-    maximumThreads = threadCount match {
+    args.get("threads") match {
       case null => DEFAULT_MAX_THREADS
       case str: String => str.toInt
       case i: Int => i
@@ -147,7 +145,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
         try {
           val paramsVector = ParVector(sourceParams, targetParams)
           paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
-          val gatherInfoResults = paramsVector.map(qp => gatherInfo(req, rsp, qp))
+          val gatherInfoResults = paramsVector.map { qp: QueryParameters => gatherInfo(req, rsp, qp) }.toList
           val sourceInfo = gatherInfoResults(0)
           val targetInfo = gatherInfoResults(1)
           (compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric),
@@ -176,12 +174,9 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       val reader = searcher.getIndexReader
 
       def processResult(result: CompareResult, sourceIfTrue: Boolean, populate: DocFields) = {
-        val (docId, fieldList) = sourceIfTrue match {
-          case true =>
-            (result.pair.sourceDoc, sourceFieldList)
-          case false =>
-            (result.pair.targetDoc, targetFieldList)
-        }
+        val (docId, fieldList) =
+          if (sourceIfTrue) (result.pair.sourceDoc, sourceFieldList)
+          else (result.pair.targetDoc, targetFieldList)
 
         val doc = reader.document(docId)
         var found = 0
@@ -197,8 +192,11 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
 
       val matches = new TesseraeMatches
+      var rank = start
       results.foreach { result =>
+        rank += 1
         val m = new TesseraeMatch
+        m.put("rank", new java.lang.Integer(rank))
         m.put("score", new java.lang.Double(result.score))
         m.put("distance", new java.lang.Double(result.distance))
 
@@ -287,7 +285,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     // A mash maps one term to a set of document ids. Build them in parallel.
     val parvector = ParVector(source, target)
     parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
-    val mashResults = parvector.map(qi => (buildMash(qi), buildTermFrequencies(qi)))
+    val mashResults = parvector.map { qi: QueryInfo => (buildMash(qi), buildTermFrequencies(qi)) }.toList
     val (sourceMash, sourceAggregateInfo) = mashResults(0)
     val (targetMash, targetAggregateInfo) = mashResults(1)
 
@@ -298,7 +296,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     // Build up information about the source and target frequencies
     val sortJobs = ParVector(sourceAggregateInfo, targetAggregateInfo)
     sortJobs.tasksupport = new ForkJoinTaskSupport(workerPool)
-    val sortResults = sortJobs.map { ai => getSortedFrequencies(ai) }
+    val sortResults = sortJobs.map { ai: AggregateTermInfo => getSortedFrequencies(ai) }.toList
     val sortedSourceFrequencies = sortResults(0)._1
     val sortedTargetFrequencies = sortResults(1)._1
     val sourceFrequencies = sortResults(0)._2
@@ -331,10 +329,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
     }.filter(_.isDefined).map(_.get)
 
-    val results = mappedResults.toList
-
-    // Return the results sorted by score (descending)
-    results.sortWith { (a, b) => a.score > b.score }
+    // Sort by score
+    mappedResults.toList.sortWith { (a, b) => a.score > b.score }
   }
 
   private def buildTermFrequencies(queryInfo: QueryInfo): AggregateTermInfo = {

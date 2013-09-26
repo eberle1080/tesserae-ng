@@ -36,8 +36,8 @@
     <table class="table table-striped">
       <thead>
         <tr>
+          <th>Rank</th>
           <th>Score</th>
-          <th>Distance</th>
           <th>Source</th>
           <th>Target</th>
           <th>Common Terms</th>
@@ -46,8 +46,8 @@
       <tbody>
       {% for m in matches %}
         <tr>
+          <td>{{ m.rank }}</td>
           <td>{{ m.score|quantize:".001,ru" }}</td>
-          <td>{{ m.distance }}</td>
           <td>{{ m.source.fields.text }}</td>
           <td>{{ m.target.fields.text }}</td>
           <td>{{ m.terms|join:", " }}</td>
