@@ -194,10 +194,17 @@ sudo find /home/tesserae/solr -type d -name data -print0 | sudo xargs -0 -n 1 rm
 sudo find /home/tesserae/solr -type f -name '*~' -print0 | sudo xargs -0 -n 1 rm -f || die "rm failed"
 
 echo "Ingesting Latin lexicon..."
+cd /vagrant
+[ -f conf/log4j-lexicon-ingest.properties ] || die "Missing file: log4j-lexicon-ingest.properties"
+sudo cp conf/log4j-lexicon-ingest.properties /opt/data/lexicon/log4j.properties || die "cp failed: log4j-lexicon-ingest.properties"
+sudo chown tesserae:tesserae /opt/data/lexicon/log4j.properties
+sudo chmod 644 /opt/data/lexicon/log4j.properties
+
 cd /opt/data/lexicon || die "cd failed: /opt/data/lexicon"
 [ -f lexicon-ingest.jar ] || die "Missing file: lexicon-ingest.jar"
 [ -f la.lexicon.csv ] || die "Missing file: la.lexicon.csv"
-sudo /opt/java/bin/java -jar lexicon-ingest.jar --input=la.lexicon.csv --output=la.lexicon.db || die "ingest failed"
+[ -f log4j.properties ] || die "Missing file: log4j.properties"
+sudo /opt/java/bin/java -client -Dlog4j.configuration=file://`pwd`/log4j.properties -jar lexicon-ingest.jar --input=la.lexicon.csv --output=la.lexicon.db || die "ingest failed"
 sudo chown -R tesserae:tesserae la.lexicon.db
 
 echo "Installing Tomcat startup scripts..."
