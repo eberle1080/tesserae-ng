@@ -130,6 +130,10 @@ MIDDLEWARE_CLASSES = (
 
 HAYSTACK_SIGNAL_PROCESSOR = 'website.signals.TesseraeNGSignalProcessor'
 
+CELERY_HAYSTACK_DEFAULT_TASK = 'website.tasks.TesseraeNGSignalHandler'
+
+SIGNAL_PROCESSOR_BATCH_SIZE = 100
+
 ROOT_URLCONF = 'website.urls'
 
 # Python dotted path to the WSGI application used by Django's runserver.

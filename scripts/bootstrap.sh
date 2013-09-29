@@ -197,14 +197,20 @@ echo "Ingesting Latin lexicon..."
 cd /vagrant
 [ -f conf/log4j-lexicon-ingest.properties ] || die "Missing file: log4j-lexicon-ingest.properties"
 sudo cp conf/log4j-lexicon-ingest.properties /opt/data/lexicon/log4j.properties || die "cp failed: log4j-lexicon-ingest.properties"
-sudo chown tesserae:tesserae /opt/data/lexicon/log4j.properties
-sudo chmod 644 /opt/data/lexicon/log4j.properties
+sudo chown tesserae:tesserae /opt/data/lexicon/log4j.properties || die "chown failed: log4j.properties"
+sudo chmod 644 /opt/data/lexicon/log4j.properties || die "chmod failed: log4j.properties"
+
+[ -f scripts/lexicon-ingest.sh ] || die "Missing file: lexicon-ingest.sh"
+sudo cp scripts/lexicon-ingest.sh /opt/data/lexicon/lexicon-ingest.sh || die "cp failed: lexicon-ingest.sh"
+sudo chown tesserae:tesserae /opt/data/lexicon/lexicon-ingest.sh || die "chown failed: lexicon-ingest.sh"
+sudo chmod 755 /opt/data/lexicon/lexicon-ingest.sh || die "chmod failed: lexicon-ingest.sh"
 
 cd /opt/data/lexicon || die "cd failed: /opt/data/lexicon"
 [ -f lexicon-ingest.jar ] || die "Missing file: lexicon-ingest.jar"
 [ -f la.lexicon.csv ] || die "Missing file: la.lexicon.csv"
+[ -f lexicon-ingest.sh ] || die "Missing file: lexicon-ingest.sh"
 [ -f log4j.properties ] || die "Missing file: log4j.properties"
-sudo /opt/java/bin/java -client -Dlog4j.configuration=file://`pwd`/log4j.properties -jar lexicon-ingest.jar --input=la.lexicon.csv --output=la.lexicon.db || die "ingest failed"
+sudo ./lexicon-ingest.sh --input=la.lexicon.csv --output=la.lexicon.db || die "ingest failed"
 sudo chown -R tesserae:tesserae la.lexicon.db
 
 echo "Installing Tomcat startup scripts..."

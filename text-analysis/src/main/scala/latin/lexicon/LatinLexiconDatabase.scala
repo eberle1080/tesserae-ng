@@ -7,7 +7,7 @@ import org.fusesource.leveldbjni.JniDBFactory._
 import net.sf.ehcache.Element
 import org.slf4j.LoggerFactory
 import org.tesserae.EhcacheManager
-import org.tesserae.lexicon.db.CSVLine
+import lex.db.CSVLine
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 object LatinLexiconDatabase {
@@ -76,7 +76,7 @@ class LatinLexiconDatabase(cacheName: Option[String], dbLocation: File) {
   protected lazy val cache =
     EhcacheManager.latinLexiconCache(cacheName)
 
-  def lookup(token: String): Option[CSVLine] = {
+  def lookup(token: String): Option[List[CSVLine]] = {
     if (token == null) {
       return None
     }
@@ -85,21 +85,26 @@ class LatinLexiconDatabase(cacheName: Option[String], dbLocation: File) {
     if (cachedLookup != null) {
       val value = cachedLookup.getObjectValue
       value match {
-        case line: CSVLine => return Some(line)
+        case null => // ignore it
+        case lines: List[_] =>
+          lines match {
+            case Nil => return Some(Nil)
+            case head :: _ => head match {
+              case _: CSVLine => return Some(lines.asInstanceOf[List[CSVLine]])
+              case _ => // ignore it
+            }
+          }
         case _ => // ignore it
       }
     }
 
     val key = token.getBytes("UTF-8")
     try {
-      val bytes = db.synchronized {
-        db.get(key)
-      }
-
+      val bytes = db.synchronized { db.get(key) }
       bytes match {
         case null => None
         case valueBytes => {
-          val line: CSVLine = try {
+          val line: List[CSVLine] = try {
             CSVLine.fromByteArray(valueBytes)
           } catch {
             case e: Exception => {

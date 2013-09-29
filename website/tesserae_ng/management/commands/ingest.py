@@ -333,7 +333,5 @@ class Command(BaseCommand):
             vol.text = full_text
             return vol
 
-        return source_text.sourcetextvolume_set.create(
-            volume=volume_name,
-            text=full_text
-        )
+        return source_text.sourcetextvolume_set.create(volume=volume_name,
+                                                       text=full_text)

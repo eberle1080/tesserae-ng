@@ -1,4 +1,4 @@
-package org.tesserae.lexicon.db
+package lex.db
 
 import java.io._
 import scala.Serializable
@@ -7,10 +7,10 @@ case class CSVLine(token: String, partOfSpeech: String, stem: String) extends Se
 
 object CSVLine {
 
-  def toByteArray(line: CSVLine): Array[Byte] = {
+  def toByteArray(lines: List[CSVLine]): Array[Byte] = {
     val bos = new ByteArrayOutputStream
     val out = new ObjectOutputStream(bos)
-    out.writeObject(line)
+    out.writeObject(lines)
     out.flush()
     bos.flush()
     val bytes = bos.toByteArray
@@ -18,7 +18,7 @@ object CSVLine {
     bytes
   }
 
-  def fromByteArray(bytes: Array[Byte]): CSVLine = {
+  def fromByteArray(bytes: Array[Byte]): List[CSVLine] = {
     val bis = new ByteArrayInputStream(bytes)
     val ois = new ObjectInputStream(bis)
     try {
@@ -28,8 +28,15 @@ object CSVLine {
       }
 
       any match {
-        case line: CSVLine => line
-        case _ => throw new IllegalArgumentException("Byte array does not contain an instance of CSVLine")
+        case lines: List[_] =>
+          lines match {
+            case Nil => Nil
+            case head :: _ => head match {
+              case _: CSVLine => lines.asInstanceOf[List[CSVLine]]
+              case _ => throw new IllegalArgumentException("Byte array does not contain an instance of List[CSVLine]")
+            }
+          }
+        case _ => throw new IllegalArgumentException("Byte array does not contain an instance of List[CSVLine]")
       }
     } finally {
       ois.close()

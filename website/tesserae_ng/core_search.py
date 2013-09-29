@@ -150,7 +150,7 @@ def _search_basic(request, form, language):
         pageInfo.append(page)
         first = False
 
-    firstPage, lastPage, windowedPages = _window_pages(pageInfo, 10)
+    firstPage, lastPage, windowedPages = _window_pages(pageInfo, 9)
 
     args = { 'language': language, 'user': request.user,
              'authenticated': request.user.is_authenticated(),

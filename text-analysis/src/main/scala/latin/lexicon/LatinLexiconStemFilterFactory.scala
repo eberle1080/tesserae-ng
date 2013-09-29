@@ -11,8 +11,14 @@ class LatinLexiconStemFilterFactory(args: Map[String, String]) extends TokenFilt
     throw new IllegalArgumentException("can't instantiate LatinLexiconStemFilterFactory without a 'database' argument")
   }
 
+  private val multiStem = if (args.containsKey("multiStem")) {
+    args.get("multiStem").toBoolean
+  } else {
+    false
+  }
+
   private val db = new LatinLexiconDatabase(Option(args.get("cacheName")), new File(args.get("database")))
 
   def create(input: TokenStream): TokenStream =
-    new LatinLexiconStemFilter(input, db)
+    new LatinLexiconStemFilter(input, multiStem, db)
 }

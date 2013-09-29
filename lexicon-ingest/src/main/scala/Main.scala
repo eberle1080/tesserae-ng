@@ -5,8 +5,24 @@ import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 import java.io._
 import org.slf4j.LoggerFactory
-import java.util.concurrent.atomic.AtomicInteger
-import org.tesserae.lexicon.db.CSVLine
+import lex.db.CSVLine
+import collection.mutable.{Set => MutableSet, HashSet => MutableHashSet}
+
+sealed trait NormalizeLevel {
+  def name: String
+}
+
+object NoNormalization extends NormalizeLevel {
+  def name: String = "none"
+}
+
+object PartialNormalization extends NormalizeLevel {
+  def name: String = "partial"
+}
+
+object FullNormalization extends NormalizeLevel {
+  def name: String = "full"
+}
 
 object Main {
 
@@ -19,6 +35,8 @@ object Main {
     out.println("Options:")
     out.println("  -i, --input=FILE         An input CSV file (required)")
     out.println("  -o, --output=DIR         An output database directory (required)")
+    out.println("  -k, --key-norm=LEVEL     Normalize keys (optional, one of 'none', 'partial',")
+    out.println("                           or 'full'). Default is 'full'")
     out.println("  -h, --help               Show this helpful message and exit")
     System.exit(code)
   }
@@ -29,13 +47,15 @@ object Main {
     val longopts = Array(
       new LongOpt("help", LongOpt.NO_ARGUMENT, null, 'h'),
       new LongOpt("input", LongOpt.REQUIRED_ARGUMENT, null, 'i'),
-      new LongOpt("output", LongOpt.REQUIRED_ARGUMENT, null, 'o')
+      new LongOpt("output", LongOpt.REQUIRED_ARGUMENT, null, 'o'),
+      new LongOpt("key-norm", LongOpt.REQUIRED_ARGUMENT, null, 'k')
     )
 
     var c = -1
     var input: File = null
     var output: File = null
-    val g = new Getopt("lexicon-ingest", args, "hi:o:", longopts)
+    var normalizeKeys: NormalizeLevel = FullNormalization
+    val g = new Getopt("lexicon-ingest", args, "hi:o:k:", longopts)
 
     c = g.getopt()
     while(c != -1) {
@@ -43,6 +63,17 @@ object Main {
         case 'h' => usage(0)
         case 'i' => input = new File(g.getOptarg)
         case 'o' => output = new File(g.getOptarg)
+        case 'k' => {
+          normalizeKeys = g.getOptarg match {
+            case "none" => NoNormalization
+            case "partial" => PartialNormalization
+            case "full" => FullNormalization
+            case other => {
+              System.err.println("Error: unknown key-norm level: `" + other + "'")
+              System.exit(1); NoNormalization
+            }
+          }
+        }
         case o => {
           System.err.println("Error: unhandled option: `" + o + "'")
           System.exit(1)
@@ -55,7 +86,7 @@ object Main {
       usage(1)
     }
 
-    (input, output)
+    (input, output, normalizeKeys)
   }
 
   private def sanityCheckPath(file: File) {
@@ -167,45 +198,97 @@ object Main {
     }
   }
 
-  def processLine(line: Array[String], writeBatch: WriteBatch, entryCount: AtomicInteger): Boolean = {
+  private def replaceVJ(lowerCase: String) =
+    lowerCase.
+      replaceAllLiterally("v", "u").
+      replaceAllLiterally("j", "i")
+
+  private val nonCharacters = "[^a-z]".r
+
+  private def normalize(str: String) = {
+    val replaced = replaceVJ(str.toLowerCase)
+    nonCharacters.replaceAllIn(replaced, "")
+  }
+
+  private def isProtectedStem(stem: String) = stem match {
+    case "sum" => true
+    case _ => false
+  }
+
+  private def processLine(line: Array[String], db: DB, keys: MutableSet[String], normalizeLevel: NormalizeLevel): Boolean = {
     if (line.length != 3) {
       throw new RuntimeException("Expected 3 columns")
     }
 
-    val obj = CSVLine(line(0).toLowerCase, line(1).toLowerCase, line(2).toLowerCase)
-    val value = CSVLine.toByteArray(obj)
-    val key = obj.token.getBytes("UTF-8")
+    val obj = CSVLine(line(0), line(1), normalize(line(2)))
 
-    writeBatch.put(key, value)
-    entryCount.getAndAdd(1)
+    val key = normalizeLevel match {
+      case NoNormalization => obj.token
+      case PartialNormalization => obj.token.toLowerCase
+      case FullNormalization => normalize(obj.token)
+    }
 
+    if (!keys.contains(key)) {
+      keys += key
+    }
+
+    val key_bytes = key.getBytes("UTF-8")
+    val old_lst: List[CSVLine] = if (isProtectedStem(obj.stem)) {
+      Nil
+    } else {
+      db.get(key_bytes) match {
+        case null => Nil
+        case valueBytes => {
+          val lst: List[CSVLine] = try {
+            CSVLine.fromByteArray(valueBytes)
+          } catch {
+            case e: Exception => {
+              logger.warn("Unable to deserialize byte stream", e)
+              null
+            }
+          }
+          Option(lst).getOrElse(Nil)
+        }
+      }
+    }
+
+    old_lst.foreach { other =>
+      // Eliminate duplicate stems, and
+      if (other.stem == obj.stem) {
+        return false
+      } else if (isProtectedStem(other.stem)) {
+        return false
+      }
+    }
+
+    val new_lst = old_lst ::: List(obj)
+    val value_bytes = CSVLine.toByteArray(new_lst)
+    db.put(key_bytes, value_bytes)
     true
   }
 
   def main(args: Array[String]) = {
-    val (input, output) = parseArgs(args)
+    val (input, output, normalizeKeys) = parseArgs(args)
     usingCSVReader(input) { csv =>
-      logger.info("Ingesting lexicon from " + input.getName + "...")
       usingDatabase(output) { db =>
-        val writeCount = new AtomicInteger(0)
-        val writeBatch = db.createWriteBatch()
-        try {
-          var lineCount = 0
-          var line: Array[String] = csv.readNext()
-          while (line != null) {
-            if (processLine(line, writeBatch, writeCount)) {
-              lineCount += 1
-            }
-            line = csv.readNext()
+        logger.info("Ingesting lexicon from " + input.getName + "...")
+        logger.info("  => Key normalization level: " + normalizeKeys.name)
+
+        var lineCount = 0
+        var line: Array[String] = csv.readNext()
+        val keys: MutableSet[String] = new MutableHashSet[String]
+
+        while (line != null) {
+          processLine(line, db, keys, normalizeKeys)
+          lineCount += 1
+          if (lineCount % 100000 == 0) {
+            logger.info("  => Processed " + plural(lineCount, "line", "lines") + " so far...")
           }
-
-          logger.info("  => Read " + plural(lineCount, "line", "lines"))
-          db.write(writeBatch)
-
-          logger.info("  => Wrote " + plural(writeCount.get(), "entry", "entries"))
-        } finally {
-          writeBatch.close()
+          line = csv.readNext()
         }
+
+        logger.info("  => Processed " + plural(lineCount, "line", "lines") + ".")
+        logger.info("  => Found " + plural(keys.size, "unique token", "unique tokens"))
       }
     }
   }

@@ -991,6 +991,7 @@
 
   <!-- The Tesserae special sauce -->
   <requestHandler name="/compare" class="org.apache.solr.handler.tesserae.TesseraeCompareHandler">
+    <bool name="filterPositions">true</bool>
   </requestHandler>
 
   <!-- for back compat with clients using /update/json and /update/csv -->  
