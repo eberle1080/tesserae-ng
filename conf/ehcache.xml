@@ -35,4 +35,14 @@
       timeToLiveSeconds="1800"
       memoryStoreEvictionPolicy="LFU"/>
 
+  <cache
+      name="latinCorpus"
+      maxEntriesLocalHeap="1000"
+      maxEntriesLocalDisk="5000"
+      eternal="false"
+      diskSpoolBufferSizeMB="20"
+      timeToIdleSeconds="1800"
+      timeToLiveSeconds="3600"
+      memoryStoreEvictionPolicy="LFU"/>
+
 </ehcache>

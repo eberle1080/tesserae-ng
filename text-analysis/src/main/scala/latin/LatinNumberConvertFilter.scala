@@ -1,7 +1,5 @@
 package org.apache.lucene.analysis.la
 
-import java.io.IOException
-
 import org.apache.lucene.analysis.{TokenFilter, TokenStream}
 import org.apache.lucene.analysis.tokenattributes.{CharTermAttribute, KeywordAttribute}
 
@@ -20,7 +18,6 @@ class LatinNumberConvertFilter(input: TokenStream, strictMode: Boolean) extends 
           termAtt.setEmpty().append(arabicNumber)
           termAtt.setLength(arabicNumber.length())
         }
-
         true
       }
     } else {

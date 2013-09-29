@@ -109,6 +109,8 @@ def _search_basic(request, form, language):
     matchTotal = results['matchTotal']
     matchStart = results['matchOffset'] + 1
     matchEnd = results['matchOffset'] + results['matchCount']
+    stopList = results['stopList']
+    stopListStr = ', '.join(sorted(stopList))
 
     myFirstIndex = results['matchOffset']
     myLastIndex = results['matchOffset'] + results['matchCount'] - 1
@@ -158,7 +160,8 @@ def _search_basic(request, form, language):
              'qtime': qtime, 'matches': matches,
              'matchTotal': matchTotal, 'matchStart': matchStart,
              'matchEnd': matchEnd, 'pageInfo': windowedPages,
-             'firstPage': firstPage, 'lastPage': lastPage }
+             'firstPage': firstPage, 'lastPage': lastPage,
+             'stopList': stopList, 'stopListStr': stopListStr }
 
     return _render(request, 'search_results.html', args)
 

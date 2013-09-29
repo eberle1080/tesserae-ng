@@ -37,6 +37,9 @@ object TesseraeCompareParams {
   // write cache
   val WC = PREFIX + "wc"
 
+  // stopword count
+  val SW = PREFIX + "sw"
+
   // include highlight info?
   val HIGHLIGHT = PREFIX + "highlight"
 }

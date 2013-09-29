@@ -37,4 +37,5 @@ object CommonMetrics {
   lazy val resultsFormattingTime = metrics.timer(name(getClass, "result-formatting-time"))
   lazy val compareExceptions = metrics.meter(name(getClass, "compare-exceptions"))
   lazy val csvParseTime = metrics.timer(name(getClass, "csv-parse-time"))
+  lazy val readTopN = metrics.timer(name(getClass, "read-stoplist-time"))
 }

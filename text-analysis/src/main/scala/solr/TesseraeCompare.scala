@@ -22,6 +22,8 @@ import scala.concurrent.forkjoin.ForkJoinPool
 import net.sf.ehcache.{Element, Ehcache}
 import org.apache.solr.handler.tesserae.metrics.CommonMetrics
 import org.tesserae.EhcacheManager
+import java.io.File
+import org.apache.solr.analysis.corpus.LatinCorpusDatabase
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -34,11 +36,17 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
   private var maximumThreads = DEFAULT_MAX_THREADS
   private var workerPool: ForkJoinPool = null
+  private var corpusDB: LatinCorpusDatabase = null
   private var cache: Ehcache = null
   private var filterPositions = false
 
   override def init(args: NamedList[_]) {
     super.init(args)
+
+    val corpusDbLoc = args.get("corpusFreqDBLocation") match {
+      case null => throw new IllegalArgumentException("Can't initialize TesseraeCompareHandler, missing 'corpusFreqDBLocation' parameter")
+      case str: String => str
+    }
 
     args.get("filterPositions") match {
       case null => // do nothing
@@ -61,6 +69,11 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val ehcacheStr = args.get("cacheName").asInstanceOf[String]
     cache = EhcacheManager.compareCache(Option(ehcacheStr))
+
+    val corpusEhcacheStr = Option(args.get("corpusCacheName").asInstanceOf[String])
+    val corpusDir = new File(corpusDbLoc)
+
+    corpusDB = new LatinCorpusDatabase(corpusEhcacheStr, corpusDir)
 
     logger.info("Initialized Ehcache")
   }
@@ -95,6 +108,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val start = params.getInt(CommonParams.START, 0)
     val rows = params.getInt(CommonParams.ROWS, 10)
     val maxDistance = params.getInt(TesseraeCompareParams.MD, DEFAULT_MAX_DISTANCE)
+    val stopWords = params.getInt(TesseraeCompareParams.SW, DEFAULT_STOP_WORDS)
     val minCommonTerms = params.getInt(TesseraeCompareParams.MCT, DEFAULT_MIN_COMMON_TERMS)
     if (minCommonTerms < 2) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "min common terms can't be less than 2")
@@ -119,7 +133,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val cacheKey =
       CacheKey(maxDistance, minCommonTerms, metric,
         params.get(TesseraeCompareParams.SQ), params.get(TesseraeCompareParams.SF), params.get(TesseraeCompareParams.SFL),
-        params.get(TesseraeCompareParams.TQ), params.get(TesseraeCompareParams.TF), params.get(TesseraeCompareParams.TFL))
+        params.get(TesseraeCompareParams.TQ), params.get(TesseraeCompareParams.TF), params.get(TesseraeCompareParams.TFL),
+        stopWords)
 
     var cachedResults: Option[CacheValue] = None
     if (readCache) {
@@ -139,28 +154,29 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       }
     }
 
-    val (sortedResults, sourceFieldList, targetFieldList, fromCache) = cachedResults match {
+    val (sortedResults, sourceFieldList, targetFieldList, stoplist, fromCache) = cachedResults match {
       case None => {
         val ctx = CommonMetrics.uncachedCompareTime.time()
         try {
+          val _stoplist = corpusDB.getTopN(stopWords)
           val paramsVector = ParVector(sourceParams, targetParams)
           paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
           val gatherInfoResults = paramsVector.map { qp: QueryParameters => gatherInfo(req, rsp, qp) }.toList
           val sourceInfo = gatherInfoResults(0)
           val targetInfo = gatherInfoResults(1)
-          (compare(sourceInfo, targetInfo, maxDistance, minCommonTerms, metric),
-            sourceInfo.fieldList, targetInfo.fieldList, false)
+          (compare(sourceInfo, targetInfo, maxDistance, _stoplist, minCommonTerms, metric),
+            sourceInfo.fieldList, targetInfo.fieldList, _stoplist, false)
         } finally {
           ctx.stop()
         }
       }
       case Some(cv) => {
-        (cv.results, cv.sourceFieldList, cv.targetFieldList, true)
+        (cv.results, cv.sourceFieldList, cv.targetFieldList, cv.stoplist, true)
       }
     }
 
     if (writeCache && !fromCache) {
-      val value = CacheValue(sortedResults, sourceFieldList, targetFieldList)
+      val value = CacheValue(sortedResults, sourceFieldList, targetFieldList, stoplist)
       val elem = new Element(cacheKey, value)
       cache.put(elem)
     }
@@ -189,6 +205,11 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
         }
 
         found
+      }
+
+      val stoplistList = new StopList
+      stoplist.foreach { term =>
+        stoplistList.add(term)
       }
 
       val matches = new TesseraeMatches
@@ -225,6 +246,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
         matches.add(m)
       }
+
+      rsp.add("stopList", stoplistList)
 
       rsp.add("matchTotal", totalResultCount)
       rsp.add("matchCount", results.length)
@@ -279,7 +302,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     (sorted, freqMap)
   }
 
-  private def compare(source: QueryInfo, target: QueryInfo, maxDistance: Int,
+  private def compare(source: QueryInfo, target: QueryInfo, maxDistance: Int, stoplist: Set[String],
                       minCommonTerms: Int, distanceMetric: DistanceMetrics.Value): List[CompareResult] = {
 
     // A mash maps one term to a set of document ids. Build them in parallel.
@@ -290,7 +313,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     val (targetMash, targetAggregateInfo) = mashResults(1)
 
     // Get all document pairs with two or more terms in common
-    val docPairs = deduplicate(findDocumentPairs(sourceMash, targetMash).filter { case (_, terms) => terms.size >= minCommonTerms })
+    val docPairs = deduplicate(findDocumentPairs(sourceMash, targetMash, stoplist).
+      filter { case (_, terms) => terms.size >= minCommonTerms })
     val metric = getMetric(distanceMetric, maxDistance)
 
     // Build up information about the source and target frequencies
@@ -350,9 +374,10 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     AggregateTermInfo(termCounts, totalWords)
   }
 
-  private def findDocumentPairs(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]]): Map[DocumentPair, Set[String]] = {
+  private def findDocumentPairs(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]],
+                                stoplist: Set[String]): Map[DocumentPair, Set[String]] = {
     // Only get terms common to both source and target
-    val sharedMash = intersetMashes(sourceMash, targetMash)
+    val sharedMash = intersetMashes(sourceMash, targetMash, stoplist)
 
     import scala.collection.mutable
     var pairCounts: Map[DocumentPair, mutable.Set[String]] = Map.empty
@@ -384,14 +409,17 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
   }
 
-  private def intersetMashes(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]]): Map[String, Set[Int]] = {
+  private def intersetMashes(sourceMash: Map[String, Set[Int]], targetMash: Map[String, Set[Int]],
+                             stoplist: Set[String]): Map[String, Set[Int]] = {
     var intersection: Map[String, Set[Int]] = Map.empty
     sourceMash.foreach { case (term, sourceDocSet) =>
       targetMash.get(term) match {
         case None => // oh well
         case Some(targetDocSet) => {
-          val docsSharingTerm = sourceDocSet.intersect(targetDocSet)
-          intersection += term -> docsSharingTerm
+          if (!stoplist.contains(term)) {
+            val docsSharingTerm = sourceDocSet.intersect(targetDocSet)
+            intersection += term -> docsSharingTerm
+          }
         }
       }
     }
@@ -612,6 +640,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
 object TesseraeCompareHandler {
   val DEFAULT_MAX_DISTANCE = 0 // 0 = no max
+  val DEFAULT_STOP_WORDS = 10
   val DEFAULT_MIN_COMMON_TERMS = 2 // can't be less than 2
   val DEFAULT_HIGHLIGHT = false
   val SPLIT_REGEX = ",| ".r

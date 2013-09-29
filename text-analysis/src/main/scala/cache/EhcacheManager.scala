@@ -8,6 +8,7 @@ object EhcacheManager {
   private lazy val ehcacheManager = CacheManager.getInstance
   private val DEFAULT_COMPARE_CACHE_NAME = "tesseraeCompare"
   private val DEFAULT_LATIN_LEXICON_CACHE_NAME = "latinLexicon"
+  private val DEFAULT_LATIN_CORPUS_CACHE_NAME = "latinCorpus"
 
   private def getCache(cacheName: String) = {
     val cache = ehcacheManager.getEhcache(cacheName)
@@ -24,4 +25,7 @@ object EhcacheManager {
 
   def latinLexiconCache(overrideName: Option[String] = None) =
     getCache(overrideName.getOrElse(DEFAULT_LATIN_LEXICON_CACHE_NAME))
+
+  def latinCorpusCache(overrideName: Option[String] = None) =
+    getCache(overrideName.getOrElse(DEFAULT_LATIN_CORPUS_CACHE_NAME))
 }

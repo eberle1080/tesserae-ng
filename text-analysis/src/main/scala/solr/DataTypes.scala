@@ -23,6 +23,7 @@ object DataTypes {
   type TesseraeDoc = java.util.HashMap[String, AnyRef]
   type TesseraeMatch = java.util.HashMap[String, AnyRef]
   type TesseraeMatches = java.util.LinkedList[TesseraeMatch]
+  type StopList = java.util.LinkedList[String]
 }
 
 import DataTypes._
@@ -43,5 +44,7 @@ final case class TermFrequencyEntry(term: String, frequency: Double)
 
 final case class CacheKey(md: Int, mct: Int, metric: DistanceMetrics.Value,
                           sq: String, sf: String, sfl: String,
-                          tq: String, tf: String, tfl: String)
-final case class CacheValue(results: List[CompareResult], sourceFieldList: List[String], targetFieldList: List[String])
+                          tq: String, tf: String, tfl: String,
+                          sw: Int)
+final case class CacheValue(results: List[CompareResult], sourceFieldList: List[String],
+                            targetFieldList: List[String], stoplist: Set[String])
