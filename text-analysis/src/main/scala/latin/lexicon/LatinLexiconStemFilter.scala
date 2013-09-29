@@ -24,13 +24,6 @@ class LatinLexiconStemFilter(input: TokenStream, multiStem: Boolean, db: LatinLe
   private var currentTokenPosition: Int = 0
   private var activeTokenList: List[CSVLine] = Nil
 
-  private val nonCharacters = "[^a-z]".r
-
-  private def replaceVJ(lowerCase: String) =
-    lowerCase.
-      replaceAllLiterally("v", "u").
-      replaceAllLiterally("j", "i")
-
   def incrementToken(): Boolean = {
     CommonMetrics.latinStemOps.mark()
 
@@ -53,19 +46,9 @@ class LatinLexiconStemFilter(input: TokenStream, multiStem: Boolean, db: LatinLe
     clearAttributes()
 
     if (activeTokenList.isEmpty) {
-      val normalizedA = String.valueOf(currentTokenBuffer, 0,  currentTokenLength)
-      val normalizedB = normalizedA.toLowerCase
-      val normalizedC = replaceVJ(normalizedB)
-      val normalizedD = nonCharacters.replaceAllIn(normalizedC, "")
-
-      val tok_list = db.lookup(normalizedA).getOrElse {
-        db.lookup(normalizedB).getOrElse {
-          db.lookup(normalizedC).getOrElse {
-            db.lookup(normalizedD).getOrElse {
-              List(CSVLine(normalizedD, "", normalizedD))
-            }
-          }
-        }
+      val token = String.valueOf(currentTokenBuffer, 0,  currentTokenLength)
+      val tok_list = db.lookup(token).getOrElse {
+        List(CSVLine(token, "", token))
       }
 
       activeTokenList = tok_list

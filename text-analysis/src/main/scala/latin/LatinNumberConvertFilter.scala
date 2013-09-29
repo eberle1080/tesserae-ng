@@ -12,7 +12,7 @@ class LatinNumberConvertFilter(input: TokenStream, strictMode: Boolean) extends 
 
   override final def incrementToken(): Boolean = {
     if (input.incrementToken()) {
-      if (keywordAttr.isKeyword()) {
+      if (keywordAttr.isKeyword) {
         true
       } else {
         val arabicNumber = numberFormatter.format(termAtt.buffer(), termAtt.length())
