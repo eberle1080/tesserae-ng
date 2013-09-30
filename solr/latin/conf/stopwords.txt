@@ -1,10 +1,1 @@
-qui
-quis
-quis2
-sum
-et
-in
-is
-hic
-non
-ego
+# This file isn't used, tesserae-ng uses dynamically constructed stop-lists

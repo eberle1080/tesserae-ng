@@ -45,6 +45,6 @@ final case class TermFrequencyEntry(term: String, frequency: Double)
 final case class CacheKey(md: Int, mct: Int, metric: DistanceMetrics.Value,
                           sq: String, sf: String, sfl: String,
                           tq: String, tf: String, tfl: String,
-                          sw: Int)
+                          sw: Int, sl: String)
 final case class CacheValue(results: List[CompareResult], sourceFieldList: List[String],
                             targetFieldList: List[String], stoplist: Set[String])

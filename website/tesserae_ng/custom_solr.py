@@ -8,7 +8,12 @@ logger = logging.getLogger(__name__)
 
 COMPARE_URL='{0}/compare'
 
-def basic_search(source, target, language, start=0, rows=10):
+def _is_sequence(arg):
+    return (not hasattr(arg, "strip") and
+            hasattr(arg, "__getitem__") or
+            hasattr(arg, "__iter__"))
+
+def basic_search(source, target, language, start=0, rows=10, stopword_list=None):
 
     if language != 'latin':
         raise Exception('Only latin is supported for now. Sorry.')
@@ -31,6 +36,13 @@ def basic_search(source, target, language, start=0, rows=10):
         'start': str(start),
         'rows': str(rows)
     }
+
+    if stopword_list is not None:
+        if _is_sequence(stopword_list):
+            stopword_list = ','.join(stopword_list)
+        elif not isinstance(stopword_list, (str, unicode)):
+            raise ValueError('invalid type for stopword_list, expected a string or something iterable')
+        get_params['tess.sl'] = str(stopword_list)
 
     response = requests.get(COMPARE_URL.format(solr_url), params=get_params)
     response.raise_for_status()

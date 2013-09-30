@@ -53,3 +53,4 @@ class SimpleSearchForm(forms.Form):
     target = STVChoiceField(queryset=SourceTextVolume.objects, empty_label="Choose a target text")
     start = forms.IntegerField(initial=0, min_value=0, widget=forms.widgets.HiddenInput())
     rows = forms.IntegerField(initial=50, min_value=1, widget=forms.widgets.HiddenInput())
+    sw = forms.CharField(min_length=0, max_length=10000, required=False, widget=forms.widgets.HiddenInput())

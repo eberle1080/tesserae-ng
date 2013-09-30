@@ -99,7 +99,14 @@ def _search_basic(request, form, language):
     initial_offset = form.cleaned_data['start']
     rows_per_page = form.cleaned_data['rows']
 
-    results = basic_search(source, target, language, start=initial_offset, rows=rows_per_page)
+    stop_words = form.cleaned_data['sw']
+    if stop_words is not None:
+        stop_words = stop_words.strip()
+        if len(stop_words) == 0:
+            stop_words = None
+
+    results = basic_search(source, target, language, start=initial_offset,
+                           rows=rows_per_page, stopword_list=stop_words)
 
     if results.has_key('error'):
         raise RuntimeError(results['error']['msg'])
@@ -145,9 +152,12 @@ def _search_basic(request, form, language):
                str(currentStartIndex) + '&rows=' + str(rows_per_page) + \
                '&source=' + str(source.id) + '&target=' + str(target.id)
 
-        page = {'num': pageCounter, 'start': currentStartIndex,
-                'active': isThisPage(currentStartIndex, currentEndIndex),
-                'not_first': not first, 'href': href}
+        if stop_words is not None:
+            href += '&sw=' + str(stop_words)
+
+        page = { 'num': pageCounter, 'start': currentStartIndex,
+                 'active': isThisPage(currentStartIndex, currentEndIndex),
+                 'not_first': not first, 'href': href}
 
         pageInfo.append(page)
         first = False

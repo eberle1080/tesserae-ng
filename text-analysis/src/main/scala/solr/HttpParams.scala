@@ -40,6 +40,9 @@ object TesseraeCompareParams {
   // stopword count
   val SW = PREFIX + "sw"
 
+  // stopword list
+  val SL = PREFIX + "sl"
+
   // include highlight info?
   val HIGHLIGHT = PREFIX + "highlight"
 }

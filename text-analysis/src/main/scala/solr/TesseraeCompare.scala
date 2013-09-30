@@ -114,6 +114,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "min common terms can't be less than 2")
     }
 
+    val callerStartListString = params.get(TesseraeCompareParams.SL, null)
+
     val metricStr = params.get(TesseraeCompareParams.METRIC)
     val metric = if (metricStr == null) {
       DistanceMetrics.DEFAULT_METRIC
@@ -134,7 +136,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       CacheKey(maxDistance, minCommonTerms, metric,
         params.get(TesseraeCompareParams.SQ), params.get(TesseraeCompareParams.SF), params.get(TesseraeCompareParams.SFL),
         params.get(TesseraeCompareParams.TQ), params.get(TesseraeCompareParams.TF), params.get(TesseraeCompareParams.TFL),
-        stopWords)
+        stopWords, callerStartListString)
 
     var cachedResults: Option[CacheValue] = None
     if (readCache) {
@@ -158,7 +160,21 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       case None => {
         val ctx = CommonMetrics.uncachedCompareTime.time()
         try {
-          val _stoplist = corpusDB.getTopN(stopWords)
+          val _stoplist: Set[String] = if (stopWords <= 0) {
+            Set.empty
+          } else {
+            if (callerStartListString != null) {
+              val normalized = callerStartListString.trim
+              if (!normalized.isEmpty) {
+                SPLIT_REGEX.split(normalized).toList.take(stopWords).toSet
+              } else {
+                corpusDB.getTopN(stopWords)
+              }
+            } else {
+              corpusDB.getTopN(stopWords)
+            }
+          }
+
           val paramsVector = ParVector(sourceParams, targetParams)
           paramsVector.tasksupport = new ForkJoinTaskSupport(workerPool)
           val gatherInfoResults = paramsVector.map { qp: QueryParameters => gatherInfo(req, rsp, qp) }.toList
