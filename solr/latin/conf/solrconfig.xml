@@ -991,7 +991,7 @@
 
   <!-- The Tesserae special sauce -->
   <requestHandler name="/compare" class="org.apache.solr.handler.tesserae.TesseraeCompareHandler">
-    <bool name="filterPositions">true</bool>
+    <bool name="filterPositions">false</bool>
     <str name="corpusFreqDBLocation">/opt/data/latin.corpus.db</str>
   </requestHandler>
 

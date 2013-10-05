@@ -4,13 +4,17 @@ import org.apache.solr.search.DocList
 
 object DataTypes {
   // Countains a list of term + position tuples
-  type TermPositionsList = List[TermPositionsListEntry]
+  type TermPositionsMap = Map[String, Set[TermPosition]]
+  type PositionsTermMap = Map[(Int, Int), Set[TermPosition]]
 
   // Maps term text -> count
   type TermCountMap = Map[String, Int]
 
   // Maps term text -> frequency
   type FrequencyMap = Map[String, Double]
+
+  // Maps term text -> matching documents
+  type TermDocumentMap = Map[String, Set[Int]]
 
   // Maps doc id -> DocumentTermInfo
   type QueryTermInfo = Map[Int, DocumentTermInfo]
@@ -28,9 +32,14 @@ object DataTypes {
 
 import DataTypes._
 
-final case class TermPositionsListEntry(term: String, position: Int)
+final case class MatchPart(info: DocumentTermInfo, position: (Int, Int))
+final case class Match(sourcePart: MatchPart, targetPart: MatchPart)
+
+final case class TermPosition(term: String, docId: Int, numeric: Int, position: (Int, Int))
+final case class Mash(termsToDocs: TermDocumentMap, docInfo: QueryTermInfo)
+
 final case class DocumentTermInfo(docID: Int, termCounts: TermCountMap,
-                                  termPositions: TermPositionsList)
+                                  termPositions: TermPositionsMap, positionTerms: PositionsTermMap)
 final case class QueryParameters(qParamName: String, searchFieldParamName: String, fieldListParamName: String)
 final case class QueryInfo(termInfo: QueryTermInfo, fieldList: List[String], searcher: (Int, Int) => DocList)
 final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
@@ -48,3 +57,5 @@ final case class CacheKey(md: Int, mct: Int, metric: DistanceMetrics.Value,
                           sw: Int, sl: String)
 final case class CacheValue(results: List[CompareResult], sourceFieldList: List[String],
                             targetFieldList: List[String], stoplist: Set[String])
+final case class DocumentPairInfo(commonTerms: Set[String], sourcePositions: TermPositionsMap,
+                                  targetPositions: TermPositionsMap)

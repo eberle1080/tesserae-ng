@@ -261,9 +261,12 @@ object Main {
       }
     }
 
-    val new_lst = old_lst ::: List(obj)
-    val value_bytes = CSVLine.toByteArray(new_lst)
+    val new_lst = obj :: old_lst
+    val sorted = new_lst.sortWith { (a, b) => a.stem.compareTo(b.stem) < 0 }
+    val value_bytes = CSVLine.toByteArray(sorted)
+
     db.put(key_bytes, value_bytes)
+
     true
   }
 

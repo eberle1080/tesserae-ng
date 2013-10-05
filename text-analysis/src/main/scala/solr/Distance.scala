@@ -60,42 +60,23 @@ trait DistanceMixin {
     frequencies
   }
 
-  protected def filterPositions(tpl: TermPositionsList): TermPositionsList = {
-    var entriesMap: Map[Int, String] = Map.empty
-    tpl.foreach { entry =>
-      val termLen = entry.term.length
-      entriesMap.get(entry.position) match {
-        case None =>
-          entriesMap += entry.position -> entry.term
-        case Some(priorTerm) =>
-          val prLen = priorTerm.length
-          if ((termLen > prLen) || (termLen == prLen && entry.term.compareTo(priorTerm) > 0)) {
-            entriesMap += entry.position -> entry.term
-          } else {
-            // leave the old one alone
-          }
-      }
-    }
+  protected def sortedPositions(id: Int, info: QueryInfo): List[TermPosition] = {
+    val posTerms = info.termInfo(id).positionTerms
+    val positions: List[(Int, Int)] = posTerms.keySet.toList.sorted
 
-    var list: TermPositionsList = Nil
-    entriesMap.foreach { case (pos, term) =>
-      list = TermPositionsListEntry(term, pos) :: list
+    var list: List[TermPosition] = Nil
+    positions.foreach { pos =>
+      list = list ::: posTerms(pos).toList
     }
 
     list
   }
 
-  protected def sortedPositions(id: Int, info: QueryInfo, filter: Boolean = true): TermPositionsList = {
-    val terms = info.termInfo(id).termPositions
-    val filtered = if (filter) { filterPositions(terms) } else { terms }
-    filtered.sortWith { (a, b) => a.position < b.position }
-  }
-
-  protected def distanceBetween(p0: TermPositionsListEntry, p1: TermPositionsListEntry) = {
+  protected def distanceBetween(p0: TermPosition, p1: TermPosition) = {
     import math.abs
     // the perl one worries about words vs. non-words. I don't have this problem
     // because everything in the term vector is guaranteed to be a real word
-    abs(p1.position - p0.position) + 1
+    abs(p1.position._1 - p0.position._1) + 1
   }
 }
 
