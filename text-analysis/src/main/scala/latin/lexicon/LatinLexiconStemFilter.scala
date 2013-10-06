@@ -51,7 +51,10 @@ class LatinLexiconStemFilter(input: TokenStream, multiStem: Boolean, db: LatinLe
         List(CSVLine(token, "", token))
       }
 
-      activeTokenList = tok_list
+      // Special indicator
+      val formToken = "_" + token
+
+      activeTokenList = CSVLine(formToken, "", formToken) :: tok_list
       posIncAtt.setPositionIncrement(currentTokenPosition)
     } else {
       posIncAtt.setPositionIncrement(0)
@@ -64,7 +67,7 @@ class LatinLexiconStemFilter(input: TokenStream, multiStem: Boolean, db: LatinLe
         val stem = if (multiStem) {
           head.stem
         } else {
-          activeTokenList.reverse(0).stem
+          activeTokenList(0).stem
         }
 
         termAtt.setEmpty().append(stem)

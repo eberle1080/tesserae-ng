@@ -8,6 +8,10 @@ import org.iq80.leveldb.{ReadOptions, DBException}
 import scala.Some
 import org.apache.solr.handler.tesserae.metrics.CommonMetrics
 
+import collection.mutable.{Set => MutableSet, HashSet => MutableHashSet}
+
+import scala.util.control.Breaks._
+
 class LatinCorpusDatabase(cacheName: Option[String], dbLocation: File) {
   private lazy val logger = LoggerFactory.getLogger(getClass)
 
@@ -57,29 +61,29 @@ class LatinCorpusDatabase(cacheName: Option[String], dbLocation: File) {
 
   protected def makeFreqCacheKey(token: String) = "freq_" + token
 
-  protected def makeTopNCacheKey(n: Int) = "top_" + n + "_frequencies"
+  protected def makeTopNCacheKey(n: Int, form: Boolean) = "top_" + n + "_frequencies_" + form.toString
 
-  def getTopN(n: Int): Set[String] = {
-    val elem = cache.get(makeTopNCacheKey(n))
+  def getTopN(n: Int, form: Boolean = false): MutableSet[String] = {
+    val elem = cache.get(makeTopNCacheKey(n, form))
     if (elem == null) {
-      val set = internalGetTopN(n)
-      val elem = new Element(makeTopNCacheKey(n), set)
+      val set = internalGetTopN(n, form)
+      val elem = new Element(makeTopNCacheKey(n, form), set)
       cache.put(elem)
       set
     } else {
       elem.getObjectValue match {
         case null => {
-          val set = internalGetTopN(n)
-          val elem = new Element(makeTopNCacheKey(n), set)
+          val set = internalGetTopN(n, form)
+          val elem = new Element(makeTopNCacheKey(n, form), set)
           cache.put(elem)
           set
         }
-        case set: Set[_] => { // close enough
-          set.asInstanceOf[Set[String]]
+        case set: MutableSet[_] => { // close enough
+          set.asInstanceOf[MutableSet[String]]
         }
         case _ => {
-          val set = internalGetTopN(n)
-          val elem = new Element(makeTopNCacheKey(n), set)
+          val set = internalGetTopN(n, form)
+          val elem = new Element(makeTopNCacheKey(n, form), set)
           cache.put(elem)
           set
         }
@@ -87,11 +91,11 @@ class LatinCorpusDatabase(cacheName: Option[String], dbLocation: File) {
     }
   }
 
-  protected def internalGetTopN(n: Int): Set[String] = {
+  protected def internalGetTopN(n: Int, wantForm: Boolean): MutableSet[String] = {
     val timer = CommonMetrics.readTopN.time()
     try {
       if (n <= 0) {
-        return Set.empty
+        return new MutableHashSet[String]
       }
 
       lock.readLock().lock()
@@ -115,8 +119,27 @@ class LatinCorpusDatabase(cacheName: Option[String], dbLocation: File) {
               unsortedList = (key, value) :: unsortedList
             }
 
-            val sorted = unsortedList.sortWith { case ((_: String, a: Int), (_: String, b: Int)) => a > b }.take(n)
-            sorted.map { _._1 }.toSet
+            val sorted = unsortedList.sortWith { case ((_: String, a: Int), (_: String, b: Int)) => a > b }
+            val set = new MutableHashSet[String]
+
+            breakable {
+              sorted.foreach { case (term, count) =>
+                val isForm = term.startsWith("_")
+                if (isForm == wantForm) {
+                  if (isForm) {
+                    set += term.substring(1)
+                  } else {
+                    set += term
+                  }
+                }
+
+                if (set.size >= n) {
+                  break()
+                }
+              }
+            }
+
+            set
           } finally {
             iterator.close()
           }
