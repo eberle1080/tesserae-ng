@@ -358,12 +358,7 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     // Only consider documents with 2 or more unique terms in common
     val filteredPairs = foundPairs.filter { case (_, dpi) => {
-      var formCount = 0
-      dpi.commonTerms.foreach { case (term, rtt) =>
-        formCount += rtt.form.size
-      }
-
-      formCount >= minCommonTerms
+      dpi.targetTerms.size >= minCommonTerms && dpi.sourceTerms.size >= minCommonTerms
     }}
 
     // If there's an (a, b) and a (b, a) match, remove one
@@ -379,34 +374,42 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     parallelPairs.tasksupport = new ForkJoinTaskSupport(workerPool)
 
     val mappedResults = parallelPairs.map { case (pair: DocumentPair, pairInfo: DocumentPairInfo) =>
-      val params = DistanceParameters(pair, pairInfo.commonTerms, source, target, frequencyInfo)
-      distMetric.calculateDistance(params) match {
+      distMetric.calculateDistance(DistanceParameters(pair, source, target, frequencyInfo)) match {
         case None => None
         case Some(distance) => {
           if (distance <= maxDistance || maxDistance <= 0) {
             var score = 0.0
-            val usedTerms = new MutableHashSet[String]
-            pairInfo.commonTerms.foreach { case (resolvedTerm, resolvedComponents) =>
-              resolvedComponents.form.foreach { term =>
-                usedTerms += resolvedTerm
-                val sourceScore = 1.0 / sourceFrequencies.getOrElse(term.text, -1.0)
-                val targetScore = 1.0 / targetFrequencies.getOrElse(term.text, -1.0)
-                if (sourceScore < 0.0) {
-                  logger.warn("No source term frequency information available for term: `" + term.text + "'")
-                } else if (targetScore < 0.0) {
-                  logger.warn("No target term frequency information available for term: `" + term.text + "'")
-                }
+            var skip = false
 
-                score += sourceScore + targetScore
+            val seenNonForms: MutableSet[String] = new MutableHashSet
+
+            pairInfo.sourceTerms.foreach { case (TermPosition(term, _, _, _), nonForms) =>
+              seenNonForms += nonForms.toList.sorted.mkString("-")
+              val sourceScore = 1.0 / sourceFrequencies.getOrElse(term, -1.0)
+              if (sourceScore < 0.0) {
+                logger.warn("No source term frequency information available for term: `" + term + "'")
+                skip = true
+              } else {
+                score += sourceScore
+              }
+            }
+
+            pairInfo.targetTerms.foreach { case (TermPosition(term, _, _, _), nonForms) =>
+              seenNonForms += nonForms.toList.sorted.mkString("-")
+              val targetScore = 1.0 / targetFrequencies.getOrElse(term, -1.0)
+              if (targetScore < 0.0) {
+                logger.warn("No target term frequency information available for term: `" + term + "'")
+                skip = true
+              } else {
+                score += targetScore
               }
             }
 
             val finalScore = math.log(score / distance.toDouble)
-            if (finalScore < 0.0 || finalScore.isNaN) {
+            if (skip || finalScore < 0.0 || finalScore.isNaN) {
               None
             } else {
-
-              val result = CompareResult(pair, usedTerms, finalScore, distance)
+              val result = CompareResult(pair, seenNonForms, finalScore, distance)
               Some(result)
             }
           } else {
@@ -425,13 +428,11 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     var totalWords = 0
 
     queryInfo.termInfo.foreach { case (docId, dti) =>
-      dti.termCounts.foreach { case (term, count) =>
-        if (term.form) {
-          totalWords += count
-          termCounts.get(term.text) match {
-            case None => termCounts += term.text -> count
-            case Some(lastCount) => termCounts += term.text -> (lastCount + count)
-          }
+      dti.formTermCounts.foreach { case (term, count) =>
+        totalWords += count
+        termCounts.get(term) match {
+          case None => termCounts += term -> count
+          case Some(lastCount) => termCounts += term -> (lastCount + count)
         }
       }
     }
@@ -441,31 +442,48 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
   private def findDocumentPairs(sourceMash: Mash, targetMash: Mash,
                                 stoplist: MutableSet[String]): MutableMap[DocumentPair, DocumentPairInfo] = {
-    // Only get terms common to both source and target
-    val commonTerms = findCommonTerms(sourceMash, targetMash, stoplist)
 
-    import scala.collection.mutable
-    val matchingPositions: mutable.Set[Match] = new mutable.HashSet[Match]
+    val match_target: TargetToSourceToF2NF = new MutableHashMap
+    val match_source: TargetToSourceToF2NF = new MutableHashMap
 
-    commonTerms.foreach { case term =>
-      val sourceDocs = sourceMash.termsToDocs.getOrElse(term, Set.empty)
-      val targetDocs = targetMash.termsToDocs.getOrElse(term, Set.empty)
-      sourceDocs.foreach { sourceDocument =>
-        targetDocs.foreach { targetDocument =>
-          if (sourceDocument != targetDocument) {
-            val sourceInfo = sourceMash.docInfo(sourceDocument)
-            val targetInfo = targetMash.docInfo(targetDocument)
-            val sourceTermPositions = sourceInfo.termPositions(term)
-            val targetTermPositions = targetInfo.termPositions(term)
+    sourceMash.nonFormsToDocs.foreach { case (term, sourceDocs) =>
+      if (!targetMash.nonFormsToDocs.contains(term)) {
+        // continue
+      } else if (stoplist.contains(term)) {
+        // continue
+      } else {
+        val targetDocs = targetMash.nonFormsToDocs(term)
+        sourceDocs.foreach { sourceDocId =>
+          val sourceInfo = sourceMash.docInfo(sourceDocId)
+          val sourceForm = sourceInfo.nf2f.get(term) match {
+            case Some(form) => form
+            case None => {
+              logger.warn("Unable to map source term `" + term + "' to a form")
+              TermPosition(term, sourceDocId, -1, (-1, -1))
+            }
+          }
 
-            sourceTermPositions.foreach { stp =>
-              val sourcePart = MatchPart(sourceInfo, stp.position)
-              targetTermPositions.foreach { ttp =>
-                val targetPart = MatchPart(targetInfo, ttp.position)
-                val m = Match(sourcePart, targetPart)
-                matchingPositions += m
+          targetDocs.foreach { targetDocId =>
+            val targetInfo = targetMash.docInfo(targetDocId)
+
+            val targetForm = targetInfo.nf2f.get(term) match {
+              case Some(form) => form
+              case None => {
+                logger.warn("Unable to map target term `" + term + "' to a form")
+                TermPosition(term, targetDocId, -1, (-1, -1))
               }
             }
+
+            val mtSet = match_target.getOrElseUpdate(targetDocId, new MutableHashMap).
+              getOrElseUpdate(sourceDocId, new MutableHashMap).
+              getOrElseUpdate(targetForm, new MutableHashSet)
+
+            val msSet = match_source.getOrElseUpdate(targetDocId, new MutableHashMap).
+              getOrElseUpdate(sourceDocId, new MutableHashMap).
+              getOrElseUpdate(sourceForm, new MutableHashSet)
+
+            mtSet += term
+            msSet += term
           }
         }
       }
@@ -473,78 +491,70 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val pairInfo: MutableMap[DocumentPair, DocumentPairInfo] = new MutableHashMap
 
-    matchingPositions.foreach { matchPair =>
-      val sourceInfo = matchPair.sourcePart.info
-      val targetInfo = matchPair.targetPart.info
-      val pair = DocumentPair(sourceInfo.docID, targetInfo.docID)
-
-      val sourceTermInfo = sourceInfo.positionTerms(matchPair.sourcePart.position)
-      val targetTermInfo = targetInfo.positionTerms(matchPair.targetPart.position)
-      val sourceTermsA = sourceTermInfo.map { tp: TermPosition => tp.term }.toSet
-      val targetTermsA = targetTermInfo.map { tp: TermPosition => tp.term }.toSet
-      val sourceTermsB = sourceTermInfo.map { tp: TermPosition => tp.term.text }.toSet
-      val targetTermsB = targetTermInfo.map { tp: TermPosition => tp.term.text }.toSet
-      val intersection = sourceTermsA.intersect(targetTermsA)
-      val textIntersection = sourceTermsB.intersect(targetTermsB)
-
-      if (!intersection.isEmpty && !textIntersection.isEmpty) {
-        val dpi = pairInfo.getOrElseUpdate(pair, {
-          val _ct = new mutable.HashMap[String, ResolvedTextTerms]
-          val _spm = new mutable.HashMap[TextTerm, mutable.Set[TermPosition]]
-          val _tpm = new mutable.HashMap[TextTerm, mutable.Set[TermPosition]]
-          DocumentPairInfo(_ct, _spm, _tpm)
-        })
-
-        val resolvedText = textIntersection.toList.sorted.mkString("-")
-        val resolvedTerm = TextTerm(resolvedText, form=false, resolved=true)
-
-        val rtt = dpi.commonTerms.getOrElseUpdate(resolvedText, {
-          val tmpA = new mutable.HashSet[TextTerm]
-          val tmpB = new mutable.HashSet[TextTerm]
-          ResolvedTextTerms(tmpA, tmpB)
-        })
-
-        intersection.foreach { term =>
-          if (term.form) {
-            rtt.form += term
+    match_target.foreach { case (targetDocId, sourceToF2NF) =>
+      sourceToF2NF.foreach { case (sourceDocId, f2nf) =>
+        if (sourceDocId == targetDocId) {
+          // continue
+        } else {
+          val l1: SourceToF2NF = match_source.getOrElse(targetDocId, new MutableHashMap)
+          if (f2nf.size < 2) {
+            sourceToF2NF.remove(sourceDocId)
+            l1.remove(sourceDocId)
+            // continue
           } else {
-            rtt.nonForm += term
+            val l2: FormToNonForms = l1.getOrElse(sourceDocId, new MutableHashMap)
+            if (l2.size < 2) {
+              sourceToF2NF.remove(sourceDocId)
+              l1.remove(sourceDocId)
+              // continue
+            } else {
+              val seenForms: MutableSet[String] = new MutableHashSet
+              f2nf.keySet.foreach { form =>
+                seenForms += form.term
+              }
+
+              if (seenForms.size < 2) {
+                // continue
+              } else {
+                seenForms.clear()
+                l2.keySet.foreach { form =>
+                  seenForms += form.term
+                }
+
+                if (seenForms.size < 2) {
+                  // continue
+                } else {
+                  val pair = DocumentPair(sourceDocId, targetDocId)
+                  val dpi = pairInfo.getOrElseUpdate(pair, DocumentPairInfo(new MutableHashMap, new MutableHashMap))
+                  dpi.targetTerms ++= f2nf
+                  dpi.sourceTerms ++= l2
+                }
+              }
+            }
           }
         }
-
-        val stp = dpi.sourcePositions.getOrElseUpdate(resolvedTerm, new MutableHashSet)
-        val ttp = dpi.targetPositions.getOrElseUpdate(resolvedTerm, new MutableHashSet)
-
-        stp ++= sourceTermInfo
-        ttp ++= targetTermInfo
       }
     }
 
     pairInfo
   }
 
-  private def findCommonTerms(sourceMash: Mash, targetMash: Mash,
-                              stoplist: MutableSet[String]): Set[TextTerm] = {
-    var intersection: Set[TextTerm] = Set.empty
-    sourceMash.termsToDocs.foreach { case (term, _) =>
-      if (targetMash.termsToDocs.contains(term) && !stoplist.contains(term.text)) {
-        intersection += term
-      }
-    }
-
-    intersection
-  }
-
   private def buildMash(qi: QueryInfo): Mash = {
-    val map: TermDocumentMap = new MutableHashMap
+    val formMap: TermDocumentMap = new MutableHashMap
+    val nonFormMap: TermDocumentMap = new MutableHashMap
+
     qi.termInfo.foreach { case (docId, termInfo) =>
-      termInfo.termCounts.keySet.foreach { term =>
-        val docSet = map.getOrElseUpdate(term, new MutableHashSet[Int])
+      termInfo.formTermCounts.keySet.foreach { term =>
+        val docSet = formMap.getOrElseUpdate(term, new MutableHashSet[Int])
+        docSet += docId
+      }
+      termInfo.nonFormTermCounts.keySet.foreach { term =>
+        val docSet = nonFormMap.getOrElseUpdate(term, new MutableHashSet[Int])
         docSet += docId
       }
     }
 
-    Mash(map, qi.termInfo)
+    Mash(formMap, nonFormMap, qi.termInfo)
   }
 
   private def gatherInfo(req: SolrQueryRequest, rsp: SolrQueryResponse, qParams: QueryParameters): QueryInfo = {
@@ -640,17 +650,18 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     var rawText: BytesRef = termsEnum.next()
     var dpEnum: DocsAndPositionsEnum = null
 
-    var counts: TermCountMap = new MutableHashMap
-    val termPos: MutableMap[TextTerm, MutableSet[TermPosition]] = new MutableHashMap
-    val posTerm: MutableMap[(Int, Int), MutableSet[TermPosition]] = new MutableHashMap
+    val formCounts: TermCountMap = new MutableHashMap
+    val nonFormCounts: TermCountMap = new MutableHashMap
+    val termPos: TermPositionsMap = new MutableHashMap
+    val posInfo: MutableMap[(Int, Int), TermPositionInfo] = new MutableHashMap
 
     while (rawText != null) {
       val termText = rawText.utf8ToString
       val freq = termsEnum.totalTermFreq.toInt
-      val term = if (termText.startsWith("_")) {
-        TextTerm(termText.substring(1), form=true, resolved=false)
+      val (term, isForm) = if (termText.startsWith("_")) {
+        (termText.substring(1), true)
       } else {
-        TextTerm(termText, form=false, resolved=false)
+        (termText, false)
       }
 
       dpEnum = termsEnum.docsAndPositions(null, dpEnum)
@@ -666,35 +677,42 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
         val posTuple = (start, end)
         val entry = TermPosition(term, docId, pos, posTuple)
 
-        val termPosSet: MutableSet[TermPosition] = termPos.get(term) match {
-          case Some(set) => set
-          case None => {
-            val tmp = new MutableHashSet[TermPosition]
-            termPos += term -> tmp
-            tmp
-          }
+        val info = posInfo.getOrElseUpdate(posTuple, TermPositionInfo(None, new MutableHashSet[String]()))
+        if (isForm) {
+          info.form = Some(entry)
+        } else {
+          info.nonForms += term
         }
 
-        val posTermSet: MutableSet[TermPosition] = posTerm.get(posTuple) match {
-          case Some(set) => set
-          case None => {
-            val tmp = new MutableHashSet[TermPosition]
-            posTerm += posTuple -> tmp
-            tmp
-          }
-        }
+        val termPosSet: MutableSet[TermPosition] = termPos.getOrElseUpdate(term, new MutableHashSet[TermPosition])
 
         termPosSet += entry
-        posTermSet += entry
 
-        val oldCount = counts.getOrElse(term, 0)
-        counts += term -> (oldCount + 1)
+        if (isForm) {
+          val oldCount = formCounts.getOrElse(term, 0)
+          formCounts += term -> (oldCount + 1)
+        } else {
+          val oldCount = nonFormCounts.getOrElse(term, 0)
+          nonFormCounts += term -> (oldCount + 1)
+        }
       }
 
       rawText = termsEnum.next()
     }
 
-    DocumentTermInfo(docId, counts, termPos, posTerm)
+    val nf2f: NonFormToFormMap = new MutableHashMap
+    posInfo.foreach { case (position, info) =>
+      info.form match {
+        case Some(termForm) =>
+          info.nonForms.foreach { term =>
+            nf2f += term -> termForm
+          }
+        case None =>
+          logger.warn("Missing a form: " + info)
+      }
+    }
+
+    DocumentTermInfo(docId, formCounts, nonFormCounts, termPos, posInfo, nf2f)
   }
 
   def getDescription =

@@ -44,11 +44,10 @@ trait DistanceMixin {
 
   protected def sortedFreq(id: Int, info: QueryInfo, freqInfo: SortedFrequencies): List[TermFrequencyEntry] = {
     var frequencies: List[TermFrequencyEntry] = Nil
-    val termInfo = info.termInfo(id).termCounts
+    val termInfo = info.termInfo(id).formTermCounts
 
     freqInfo.foreach { entry =>
-      val term = TextTerm(entry.term, form=true, resolved=false)
-      termInfo.get(term).map { ct =>
+      termInfo.get(entry.term).map { ct =>
         if (ct > 0) {
           frequencies = entry :: frequencies
 
@@ -69,9 +68,11 @@ trait DistanceMixin {
 
     var list: List[TermPosition] = Nil
     positions.foreach { pos =>
-      posTerms(pos).filter { tp => tp.term.form }.toList
-
-      list = list ::: posTerms(pos).toList
+      posTerms.get(pos).map { posTerm =>
+        posTerm.form.map { formTerm =>
+          list = list ::: List(TermPosition(formTerm.term, id, formTerm.numeric, pos))
+        }
+      }
     }
 
     list
@@ -95,8 +96,8 @@ class FreqDistance extends Distance with DistanceMixin {
       val positions = sortedPositions(docID, info)
       val (tt0, tt1) = (terms(0).term, terms(1).term)
       val (t0, t1) = try {
-        val _t0 = positions.find(tp => tp.term.text == tt0).get
-        val _t1 = positions.find(tp => tp.term.text == tt1).get
+        val _t0 = positions.find(tp => tp.term == tt0).get
+        val _t1 = positions.find(tp => tp.term == tt1).get
         (_t0, _t1)
       } catch {
         case e: NoSuchElementException =>
