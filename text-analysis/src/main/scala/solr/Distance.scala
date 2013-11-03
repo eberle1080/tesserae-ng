@@ -1,6 +1,7 @@
 package org.apache.solr.handler.tesserae
 
 import org.apache.solr.handler.tesserae.DataTypes.SortedFrequencies
+import org.slf4j.LoggerFactory
 
 object DistanceMetrics extends Enumeration {
   val FREQ, FREQ_TARGET, FREQ_SOURCE, SPAN, SPAN_TARGET, SPAN_SOURCE = Value
@@ -40,6 +41,8 @@ trait Distance {
 
 // Some re-usable distance functions
 trait DistanceMixin {
+  private lazy val logger = LoggerFactory.getLogger(getClass)
+
   import DataTypes._
 
   protected def sortedFreq(id: Int, info: QueryInfo, freqInfo: SortedFrequencies): List[TermFrequencyEntry] = {
@@ -78,11 +81,17 @@ trait DistanceMixin {
     list
   }
 
-  protected def distanceBetween(p0: TermPosition, p1: TermPosition) = {
+  protected def distanceBetween(p0: TermPosition, p1: TermPosition): Option[Int] = {
     import math.abs
     // the perl one worries about words vs. non-words. I don't have this problem
     // because everything in the term vector is guaranteed to be a real word
-    abs(p1.position._1 - p0.position._1) + 1
+
+    if (p0.numeric == p1.numeric) {
+      logger.warn("Found two overlapping results: " + p0 + ", " + p1)
+      None
+    } else {
+      Some(abs(p1.numeric - p0.numeric) + 1)
+    }
   }
 }
 
@@ -105,7 +114,7 @@ class FreqDistance extends Distance with DistanceMixin {
           return None
       }
 
-      Some(distanceBetween(t0, t1))
+      distanceBetween(t0, t1)
     }
   }
 
@@ -139,7 +148,7 @@ class SpanDistance extends Distance with DistanceMixin {
     } else {
       val first = positions.head
       val last = positions.takeRight(1).head
-      Some(distanceBetween(first, last))
+      distanceBetween(first, last)
     }
   }
 

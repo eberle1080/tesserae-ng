@@ -428,11 +428,13 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     var totalWords = 0
 
     queryInfo.termInfo.foreach { case (docId, dti) =>
-      dti.formTermCounts.foreach { case (term, count) =>
-        totalWords += count
-        termCounts.get(term) match {
-          case None => termCounts += term -> count
-          case Some(lastCount) => termCounts += term -> (lastCount + count)
+      dti.nonFormTermCounts.foreach { case (term, count) =>
+        dti.nf2f.get(term).map { form =>
+          totalWords += count
+          termCounts.get(form.term) match {
+            case None => termCounts += form.term -> count
+            case Some(lastCount) => termCounts += form.term -> (lastCount + count)
+          }
         }
       }
     }
