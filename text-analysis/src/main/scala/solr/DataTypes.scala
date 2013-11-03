@@ -59,7 +59,9 @@ final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
 final case class AggregateTermInfo(termCounts: MutableMap[String, Int], totalTermCount: Int) // used for calculating frequency
 final case class FrequencyInfo(sourceTerms: AggregateTermInfo, targetTerms: AggregateTermInfo)
 final case class SortedFrequencyInfo(sourceFrequencies: SortedFrequencies, targetFrequencies: SortedFrequencies)
-final case class DistanceParameters(pair: DocumentPair, source: QueryInfo, target: QueryInfo, frequencies: SortedFrequencyInfo)
+final case class DistanceParameters(pair: DocumentPair, source: QueryInfo,
+                                    target: QueryInfo, frequencies: SortedFrequencyInfo,
+                                    sourceTerms: Set[String], targetTerms: Set[String])
 final case class CompareResult(pair: DocumentPair, commonTerms: MutableSet[String], score: Double, distance: Int)
 final case class TermFrequencyEntry(term: String, frequency: Double)
 

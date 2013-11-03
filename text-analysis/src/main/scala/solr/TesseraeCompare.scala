@@ -374,7 +374,10 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     parallelPairs.tasksupport = new ForkJoinTaskSupport(workerPool)
 
     val mappedResults = parallelPairs.map { case (pair: DocumentPair, pairInfo: DocumentPairInfo) =>
-      distMetric.calculateDistance(DistanceParameters(pair, source, target, frequencyInfo)) match {
+      val sourceTerms = pairInfo.sourceTerms.keySet.map { st => st.term }.toSet
+      val targetTerms = pairInfo.targetTerms.keySet.map { tt => tt.term }.toSet
+
+      distMetric.calculateDistance(DistanceParameters(pair, source, target, frequencyInfo, sourceTerms, targetTerms)) match {
         case None => None
         case Some(distance) => {
           if (distance <= maxDistance || maxDistance <= 0) {
