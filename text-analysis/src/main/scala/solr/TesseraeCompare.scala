@@ -22,11 +22,12 @@ import scala.concurrent.forkjoin.ForkJoinPool
 import net.sf.ehcache.{Element, Ehcache}
 import org.apache.solr.handler.tesserae.metrics.CommonMetrics
 import org.tesserae.EhcacheManager
-import java.io.File
+import java.io.{FileWriter, File}
 import org.apache.solr.analysis.corpus.LatinCorpusDatabase
 
 import collection.mutable.{Map => MutableMap, Set => MutableSet,
                            HashMap => MutableHashMap, HashSet => MutableHashSet}
+import java.util.Date
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -328,16 +329,53 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     (sorted, freqMap)
   }
 
+  private def dumpFrequencyInfo(timestamp: Long, freq: AggregateTermInfo, sourceIfTrue: Boolean) {
+    val root_dir = new File("/opt/data/freq")
+    if (!root_dir.exists()) {
+      root_dir.mkdirs()
+    }
+
+    val ts_dir = new File(root_dir, timestamp.toString)
+    if (!ts_dir.exists()) {
+      ts_dir.mkdirs()
+    }
+
+    val filename = new File(ts_dir, if (sourceIfTrue) "source_freq.txt" else "target_freq.txt")
+
+    val fw = new FileWriter(filename)
+    try {
+      fw.write("# count: " + freq.totalTermCount + "\n")
+
+      var frequencies: List[(String, Int)] = Nil
+      freq.termCounts.foreach { case tuple =>
+        frequencies = tuple :: frequencies
+      }
+
+      val sorted = frequencies.sortWith((a, b) => a._2 > b._2)
+      sorted.foreach { case (term, count) =>
+        fw.write(term)
+        fw.write("\t")
+        fw.write(count.toString)
+        fw.write("\n")
+      }
+    } finally {
+      fw.close()
+    }
+  }
+
   private def compare(source: QueryInfo, target: QueryInfo, maxDistance: Int, stoplist: MutableSet[String],
                       minCommonTerms: Int, distanceMetric: DistanceMetrics.Value): List[CompareResult] = {
 
     // A mash maps one term to a set of document ids. Build them in parallel.
-    val parvector = ParVector(source, target)
+    val parvector = ParVector((source, true), (target, false))
     parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
 
-    val mashAndFreqResults = parvector.map { qi: QueryInfo =>
+    val now = new Date().getTime
+
+    val mashAndFreqResults = parvector.map { case (qi: QueryInfo, b: Boolean) =>
       val mash = buildMash(qi)
       val frequencyInfo = buildTermFrequencies(qi)
+      //dumpFrequencyInfo(now, frequencyInfo, b)
       val sorted = getSortedFrequencies(frequencyInfo)
       (mash, sorted._1, sorted._2)
     }.toList
@@ -427,22 +465,65 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   }
 
   private def buildTermFrequencies(queryInfo: QueryInfo): AggregateTermInfo = {
-    val termCounts: MutableMap[String, Int] = new MutableHashMap
+    val countByWord: MutableMap[String, Int] = new MutableHashMap
+    val byFeature: MutableMap[String, MutableSet[String]] = new MutableHashMap
+    val wordsToStems: MutableMap[String, MutableSet[String]] = new MutableHashMap
+
     var totalWords = 0
 
     queryInfo.termInfo.foreach { case (docId, dti) =>
+      dti.formTermCounts.foreach { case (term, count) =>
+        val theCount = count + countByWord.getOrElse(term, 0)
+        countByWord += term -> theCount
+        totalWords += count
+      }
+
       dti.nonFormTermCounts.foreach { case (term, count) =>
-        dti.nf2f.get(term).map { form =>
-          totalWords += count
-          termCounts.get(form.term) match {
-            case None => termCounts += form.term -> count
-            case Some(lastCount) => termCounts += form.term -> (lastCount + count)
+        val form = dti.nf2f(term).term
+        val set1: MutableSet[String] = byFeature.get(term) match {
+          case Some(s) => s
+          case None => {
+            val tmp = new MutableHashSet[String]
+            byFeature += term -> tmp
+            tmp
+          }
+        }
+
+        set1 += form
+
+        val set2: MutableSet[String] = wordsToStems.get(form) match {
+          case Some(s) => s
+          case None => {
+            val tmp = new MutableHashSet[String]
+            wordsToStems += form -> tmp
+            tmp
+          }
+        }
+
+        set2 += term
+      }
+    }
+
+    val countByFeature: MutableMap[String, Int] = new MutableHashMap
+
+    countByWord.keySet.foreach { word1 =>
+      val alreadySeen: MutableSet[String] = new MutableHashSet
+      wordsToStems.get(word1).map { w1 =>
+        w1.foreach { case key =>
+          byFeature.get(key).map { bf =>
+            bf.foreach { word2 =>
+              if (!alreadySeen.contains(word2)) {
+                val priorCount = countByFeature.getOrElse(word1, 0)
+                countByFeature += word1 -> (priorCount + countByWord.getOrElse(word2, 0))
+                alreadySeen += word2
+              }
+            }
           }
         }
       }
     }
 
-    AggregateTermInfo(termCounts, totalWords)
+    AggregateTermInfo(countByFeature, totalWords)
   }
 
   private def findDocumentPairs(sourceMash: Mash, targetMash: Mash,
