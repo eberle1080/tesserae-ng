@@ -46,24 +46,21 @@ trait DistanceMixin {
 
   import DataTypes._
 
-  protected def sortedFilteredFreq(id: Int, info: QueryInfo, matchingTerms: Set[String], freqInfo: SortedFrequencies): List[TermFrequencyEntry] = {
+  protected def sortedFilteredFreq(id: Int, info: QueryInfo, matchingTerms: Set[String], freqInfo: FrequencyMap): List[TermFrequencyEntry] = {
     var frequencies: List[TermFrequencyEntry] = Nil
     val termInfo = info.termInfo(id).formTermCounts
 
-    freqInfo.foreach { entry =>
-      termInfo.get(entry.term).map { ct =>
-        if (ct > 0 && matchingTerms.contains(entry.term)) {
-          frequencies = entry :: frequencies
-
-          // Since we only use the first 2 anyway...
-          if (frequencies.length >= 2) {
-            return frequencies
+    matchingTerms.foreach { term =>
+      termInfo.get(term).map { count =>
+        if (count > 0) {
+          freqInfo.get(term).map { freq =>
+            frequencies = TermFrequencyEntry(term, freq) :: frequencies
           }
         }
       }
     }
 
-    frequencies
+    frequencies.sortWith((a, b) => a.frequency < b.frequency)
   }
 
   protected def sortedPositions(id: Int, info: QueryInfo): List[TermPosition] = {
@@ -98,7 +95,7 @@ trait DistanceMixin {
 
 class FreqDistance extends Distance with DistanceMixin {
 
-  protected def internalDistance(docID: Int, info: QueryInfo, freqInfo: SortedFrequencies, matchingTerms: Set[String]): Option[Int] = {
+  protected def internalDistance(docID: Int, info: QueryInfo, freqInfo: FrequencyMap, matchingTerms: Set[String]): Option[Int] = {
     val terms = sortedFilteredFreq(docID, info, matchingTerms, freqInfo)
     if (terms.length < 2) {
       None

@@ -132,7 +132,7 @@
        idea to convert back to the official format e.g. via IndexWriter.addIndexes(IndexReader)
        before upgrading to a newer version to avoid unnecessary reindexing.
   -->
-  <codecFactory class="solr.SchemaCodecFactory"/>
+  <codecFactory class="org.tesserae.codec.CustomSchemaCodecFactory"/>
 
   <!-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
        Index Config - These settings control low-level behavior of indexing
@@ -484,9 +484,9 @@
                and old cache.  
       -->
     <filterCache class="solr.LRUCache"
-                 size="1000"
+                 size="16000"
                  initialSize="500"
-                 autowarmCount="1000"/>
+                 autowarmCount="16000"/>
 
     <!-- Query Result Cache
          
@@ -505,7 +505,7 @@
          this cache will not be autowarmed.  
       -->
     <documentCache class="solr.LRUCache"
-                   size="512"
+                   size="16000"
                    initialSize="512"
                    autowarmCount="0"/>
     

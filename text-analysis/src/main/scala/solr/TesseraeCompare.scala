@@ -13,7 +13,7 @@ import org.apache.solr.common.util.NamedList
 import org.apache.solr.search._
 import org.apache.solr.common.params.CommonParams
 import org.apache.solr.common.SolrException
-import org.apache.lucene.index.{Terms, DocsAndPositionsEnum, TermsEnum, IndexReader}
+import org.apache.lucene.index.{DocsAndPositionsEnum, TermsEnum, IndexReader}
 import org.apache.lucene.util.BytesRef
 import org.slf4j.LoggerFactory
 import collection.parallel.immutable.ParVector
@@ -27,7 +27,10 @@ import org.apache.solr.analysis.corpus.LatinCorpusDatabase
 
 import collection.mutable.{Map => MutableMap, Set => MutableSet,
                            HashMap => MutableHashMap, HashSet => MutableHashSet}
-import java.util.Date
+import java.util.UUID
+
+import org.tesserae.utils.TimerUtils.{time, timeQuietly}
+import org.tesserae.utils.TimerUtils
 
 final class TesseraeCompareHandler extends RequestHandlerBase {
 
@@ -83,21 +86,27 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   }
 
   def handleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
-    CommonMetrics.compareOps.mark()
-    val ctx = CommonMetrics.compareTime.time()
-    try {
-      internalHandleRequestBody(req, rsp)
-    } catch {
-      case e: Exception =>
-        CommonMetrics.compareExceptions.mark()
-        logger.error("Unhandled exception: " + e.getMessage, e)
-        throw e
-    } finally {
-      ctx.stop()
+    implicit val context = RequestContext(UUID.randomUUID().toString)
+
+    time("total request time", enabled=false) {
+      CommonMetrics.compareOps.mark()
+      val ctx = CommonMetrics.compareTime.time()
+      try {
+        internalHandleRequestBody(req, rsp)
+      } catch {
+        case e: Exception =>
+          CommonMetrics.compareExceptions.mark()
+          logger.error("Unhandled exception: " + e.getMessage, e)
+          throw e
+      } finally {
+        ctx.stop()
+      }
     }
+
+    TimerUtils.printRequestStats
   }
 
-  private def internalHandleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse) {
+  private def internalHandleRequestBody(req: SolrQueryRequest, rsp: SolrQueryResponse)(implicit context: RequestContext) {
     val params = req.getParams
     val returnFields = new SolrReturnFields(req)
     rsp.setReturnFields(returnFields)
@@ -208,82 +217,84 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
       cache.put(elem)
     }
 
-    val timer = CommonMetrics.resultsFormattingTime.time()
-    try {
-      val results = sortedResults.drop(start).take(rows)
-      val totalResultCount = sortedResults.length
+    time("formatting", enabled=false) {
+      val timer = CommonMetrics.resultsFormattingTime.time()
+      try {
+        val results = sortedResults.drop(start).take(rows)
+        val totalResultCount = sortedResults.length
 
-      val searcher = req.getSearcher
-      val reader = searcher.getIndexReader
+        val searcher = req.getSearcher
+        val reader = searcher.getIndexReader
 
-      def processResult(result: CompareResult, sourceIfTrue: Boolean, populate: DocFields) = {
-        val (docId, fieldList) =
-          if (sourceIfTrue) (result.pair.sourceDoc, sourceFieldList)
-          else (result.pair.targetDoc, targetFieldList)
+        def processResult(result: CompareResult, sourceIfTrue: Boolean, populate: DocFields) = {
+          val (docId, fieldList) =
+            if (sourceIfTrue) (result.pair.sourceDoc, sourceFieldList)
+            else (result.pair.targetDoc, targetFieldList)
 
-        val doc = reader.document(docId)
-        var found = 0
-        fieldList.foreach { fieldName =>
-          val fieldValue = doc.get(fieldName)
-          if (fieldValue != null) {
-            found += 1
-            populate.put(fieldName, fieldValue)
+          val doc = reader.document(docId)
+          var found = 0
+          fieldList.foreach { fieldName =>
+            val fieldValue = doc.get(fieldName)
+            if (fieldValue != null) {
+              found += 1
+              populate.put(fieldName, fieldValue)
+            }
           }
+
+          found
         }
 
-        found
+        val stoplistList = new StopList
+        stoplist.foreach { term =>
+          stoplistList.add(term)
+        }
+
+        val matches = new TesseraeMatches
+        var rank = start
+        results.foreach { result =>
+          rank += 1
+          val m = new TesseraeMatch
+          m.put("rank", new java.lang.Integer(rank))
+          m.put("score", new java.lang.Double(result.score))
+          m.put("distance", new java.lang.Double(result.distance))
+
+          val terms = new TermList
+          result.commonTerms.toList.sorted.foreach { term =>
+            terms.add(term)
+          }
+
+          m.put("terms", terms)
+
+          val sdoc = new TesseraeDoc
+          val tdoc = new TesseraeDoc
+
+          val sourceFields = new DocFields
+          if (processResult(result, sourceIfTrue=true, sourceFields) > 0) {
+            sdoc.put("fields", sourceFields)
+          }
+
+          val targetFields = new DocFields
+          if (processResult(result, sourceIfTrue=false, targetFields) > 0) {
+            tdoc.put("fields", targetFields)
+          }
+
+          m.put("source", sdoc)
+          m.put("target", tdoc)
+
+          matches.add(m)
+        }
+
+        rsp.add("stopList", stoplistList)
+
+        rsp.add("matchTotal", totalResultCount)
+        rsp.add("matchCount", results.length)
+        rsp.add("matchOffset", start)
+
+        rsp.add("matches", matches)
+        rsp.add("cached", fromCache)
+      } finally {
+        timer.stop()
       }
-
-      val stoplistList = new StopList
-      stoplist.foreach { term =>
-        stoplistList.add(term)
-      }
-
-      val matches = new TesseraeMatches
-      var rank = start
-      results.foreach { result =>
-        rank += 1
-        val m = new TesseraeMatch
-        m.put("rank", new java.lang.Integer(rank))
-        m.put("score", new java.lang.Double(result.score))
-        m.put("distance", new java.lang.Double(result.distance))
-
-        val terms = new TermList
-        result.commonTerms.toList.sorted.foreach { term =>
-          terms.add(term)
-        }
-
-        m.put("terms", terms)
-
-        val sdoc = new TesseraeDoc
-        val tdoc = new TesseraeDoc
-
-        val sourceFields = new DocFields
-        if (processResult(result, sourceIfTrue=true, sourceFields) > 0) {
-          sdoc.put("fields", sourceFields)
-        }
-
-        val targetFields = new DocFields
-        if (processResult(result, sourceIfTrue=false, targetFields) > 0) {
-          tdoc.put("fields", targetFields)
-        }
-
-        m.put("source", sdoc)
-        m.put("target", tdoc)
-
-        matches.add(m)
-      }
-
-      rsp.add("stopList", stoplistList)
-
-      rsp.add("matchTotal", totalResultCount)
-      rsp.add("matchCount", results.length)
-      rsp.add("matchOffset", start)
-
-      rsp.add("matches", matches)
-      rsp.add("cached", fromCache)
-    } finally {
-      timer.stop()
     }
   }
 
@@ -295,38 +306,39 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
   }
 
-  private def deduplicate(docPairs: MutableMap[DocumentPair, DocumentPairInfo]): Map[DocumentPair, DocumentPairInfo] = {
-    val deduped = new MutableHashMap[DocumentPair, (DocumentPair, DocumentPairInfo)]
-    docPairs.foreach { case (pair, info) =>
-      val first = pair.sourceDoc
-      val second = pair.targetDoc
-      val (a, b) = if (first > second) {
-        (second, first)
-      } else {
-        (first, second)
+  private def deduplicate(docPairs: MutableMap[DocumentPair, DocumentPairInfo])(implicit context: RequestContext): Map[DocumentPair, DocumentPairInfo] = {
+    time("deduplicate", enabled=false) {
+      val deduped = new MutableHashMap[DocumentPair, (DocumentPair, DocumentPairInfo)]
+      docPairs.foreach { case (pair, info) =>
+        val first = pair.sourceDoc
+        val second = pair.targetDoc
+        val (a, b) = if (first > second) {
+          (second, first)
+        } else {
+          (first, second)
+        }
+
+        val key = DocumentPair(a, b)
+        if (!deduped.contains(key)) {
+          deduped += key -> (pair, info)
+        }
       }
 
-      val key = DocumentPair(a, b)
-      if (!deduped.contains(key)) {
-        deduped += key -> (pair, info)
-      }
+      deduped.map { case (_, (pair, set)) => pair -> set }.toMap
     }
-
-    deduped.map { case (_, (pair, set)) => pair -> set }.toMap
   }
 
-  private def getSortedFrequencies(freqInfo: AggregateTermInfo): (SortedFrequencies, FrequencyMap) = {
-    var frequencies: SortedFrequencies = Nil
-    var freqMap: FrequencyMap = new MutableHashMap
-    val total = freqInfo.totalTermCount.toDouble
-    freqInfo.termCounts.foreach { case (term, count) =>
-      val frequency = count.toDouble / total
-      frequencies = TermFrequencyEntry(term, frequency) :: frequencies
-      freqMap += term -> frequency
-    }
+  private def getFrequencies(freqInfo: AggregateTermInfo)(implicit context: RequestContext): FrequencyMap = {
+    time("getFrequencies", enabled=false) {
+      var freqMap: FrequencyMap = new MutableHashMap
+      val total = freqInfo.totalTermCount.toDouble
+      freqInfo.termCounts.foreach { case (term, count) =>
+        val frequency = count.toDouble / total
+        freqMap += term -> frequency
+      }
 
-    val sorted = frequencies.sortWith { case (a, b) => a.frequency < b.frequency }
-    (sorted, freqMap)
+      freqMap
+    }
   }
 
   private def dumpFrequencyInfo(timestamp: Long, freq: AggregateTermInfo, sourceIfTrue: Boolean) {
@@ -364,212 +376,206 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
   }
 
   private def compare(source: QueryInfo, target: QueryInfo, maxDistance: Int, stoplist: MutableSet[String],
-                      minCommonTerms: Int, distanceMetric: DistanceMetrics.Value): List[CompareResult] = {
+                      minCommonTerms: Int, distanceMetric: DistanceMetrics.Value)(implicit context: RequestContext): List[CompareResult] = {
 
-    // A mash maps one term to a set of document ids. Build them in parallel.
-    val parvector = ParVector((source, true), (target, false))
-    parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
+    time("compare", enabled=false) {
 
-    val now = new Date().getTime
+      // A mash maps one term to a set of document ids. Build them in parallel.
+      val parvector = ParVector((source, true), (target, false))
+      parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
 
-    val mashAndFreqResults = parvector.map { case (qi: QueryInfo, b: Boolean) =>
-      val mash = buildMash(qi)
-      val frequencyInfo = buildTermFrequencies(qi)
-      //dumpFrequencyInfo(now, frequencyInfo, b)
-      val sorted = getSortedFrequencies(frequencyInfo)
-      (mash, sorted._1, sorted._2)
-    }.toList
+      val mashAndFreqResults = time("buildMash & frequency stuff", enabled=false) {
+        parvector.map { case (qi: QueryInfo, b: Boolean) =>
+          val mash = buildMash(qi)
+          val frequencyInfo = buildTermFrequencies(qi)
+          val digested = getFrequencies(frequencyInfo)
+          (mash, digested)
+        }.toList
+      }
 
-    val (sourceMash, sortedSourceFrequencies, sourceFrequencies) = mashAndFreqResults(0)
-    val (targetMash, sortedTargetFrequencies, targetFrequencies) = mashAndFreqResults(1)
+      val (sourceMash, sourceFrequencies) = mashAndFreqResults(0)
+      val (targetMash, targetFrequencies) = mashAndFreqResults(1)
 
-    // Find the overlapping documents
-    val fpTimer = CommonMetrics.findDocumentPairs.time()
-    val startTime = System.currentTimeMillis
-    val foundPairs = try {
-      findDocumentPairs(sourceMash, targetMash, stoplist)
-    } finally {
-      fpTimer.stop()
-      val endTime = System.currentTimeMillis
-      logger.info("Spent " + (endTime - startTime) + " ms in findDocumentPairs")
-    }
-
-    // Only consider documents with 2 or more unique terms in common
-    val filteredPairs = foundPairs.filter { case (_, dpi) => {
-      dpi.targetTerms.size >= minCommonTerms && dpi.sourceTerms.size >= minCommonTerms
-    }}
-
-    // If there's an (a, b) and a (b, a) match, remove one
-    val docPairs = deduplicate(filteredPairs)
-
-    val distMetric = getMetric(distanceMetric, maxDistance)
-
-    // Build up information about the source and target frequencies
-    val frequencyInfo = SortedFrequencyInfo(sortedSourceFrequencies, sortedTargetFrequencies)
-
-    // Calculate the scores and distances in parallel
-    val parallelPairs = docPairs.par
-    parallelPairs.tasksupport = new ForkJoinTaskSupport(workerPool)
-
-    val mappedResults = parallelPairs.map { case (pair: DocumentPair, pairInfo: DocumentPairInfo) =>
-      val sourceTerms = pairInfo.sourceTerms.keySet.map { st => st.term }.toSet
-      val targetTerms = pairInfo.targetTerms.keySet.map { tt => tt.term }.toSet
-
-      distMetric.calculateDistance(DistanceParameters(pair, source, target, frequencyInfo, sourceTerms, targetTerms)) match {
-        case None => None
-        case Some(distance) => {
-          if (distance <= maxDistance || maxDistance <= 0) {
-            var score = 0.0
-            var skip = false
-
-            val seenNonForms: MutableSet[String] = new MutableHashSet
-
-            pairInfo.sourceTerms.foreach { case (TermPosition(term, _, _, _), nonForms) =>
-              seenNonForms += nonForms.toList.sorted.mkString("-")
-              val sourceScore = 1.0 / sourceFrequencies.getOrElse(term, -1.0)
-              if (sourceScore < 0.0) {
-                logger.warn("No source term frequency information available for term: `" + term + "'")
-                skip = true
-              } else {
-                score += sourceScore
-              }
-            }
-
-            pairInfo.targetTerms.foreach { case (TermPosition(term, _, _, _), nonForms) =>
-              seenNonForms += nonForms.toList.sorted.mkString("-")
-              val targetScore = 1.0 / targetFrequencies.getOrElse(term, -1.0)
-              if (targetScore < 0.0) {
-                logger.warn("No target term frequency information available for term: `" + term + "'")
-                skip = true
-              } else {
-                score += targetScore
-              }
-            }
-
-            val finalScore = math.log(score / distance.toDouble)
-            if (skip || finalScore < 0.0 || finalScore.isNaN) {
-              None
-            } else {
-              val result = CompareResult(pair, seenNonForms, finalScore, distance)
-              Some(result)
-            }
-          } else {
-            None
-          }
+      // Find the overlapping documents
+      val foundPairs = time ("findDocumentPairs", enabled=false) {
+        val fpTimer = CommonMetrics.findDocumentPairs.time()
+        try {
+          findDocumentPairs(sourceMash, targetMash, stoplist)
+        } finally {
+          fpTimer.stop()
         }
       }
-    }.filter(_.isDefined).map(_.get)
 
-    // Sort by score
-    mappedResults.toList.sortWith { (a, b) => a.score > b.score }
+      // Only consider documents with 2 or more unique terms in common
+      val filteredPairs = time("filter pairs", enabled=false) { foundPairs.filter { case (_, dpi) => {
+        dpi.targetTerms.size >= minCommonTerms && dpi.sourceTerms.size >= minCommonTerms
+      }}}
+
+      // If there's an (a, b) and a (b, a) match, remove one
+      val docPairs = deduplicate(filteredPairs)
+
+      val distMetric = getMetric(distanceMetric, maxDistance)
+
+      // Build up information about the source and target frequencies
+      val frequencyInfo = DigestedFrequencyInfo(sourceFrequencies, targetFrequencies)
+
+      // Calculate the scores and distances in parallel
+      val parallelPairs = docPairs.par
+      parallelPairs.tasksupport = new ForkJoinTaskSupport(workerPool)
+
+      val mappedResults = time("calculate distance & score", enabled=false) {
+        parallelPairs.map { case (pair: DocumentPair, pairInfo: DocumentPairInfo) =>
+          val sourceTerms = pairInfo.sourceTerms.keySet.map { st => st.term }.toSet
+          val targetTerms = pairInfo.targetTerms.keySet.map { tt => tt.term }.toSet
+          val distanceParams = DistanceParameters(pair, source, target, frequencyInfo, sourceTerms, targetTerms)
+
+          distMetric.calculateDistance(distanceParams) match {
+            case None => None
+            case Some(distance) => {
+              if (distance <= maxDistance || maxDistance <= 0) {
+                var score = 0.0
+                var skip = false
+
+                val seenNonForms: MutableSet[String] = new MutableHashSet
+
+                pairInfo.sourceTerms.foreach { case (TermPosition(term, _, _, _), nonForms) =>
+                  seenNonForms += nonForms.toList.sorted.mkString("-")
+                  val sourceScore = 1.0 / sourceFrequencies.getOrElse(term, -1.0)
+                  if (sourceScore < 0.0) {
+                    logger.warn("No source term frequency information available for term: `" + term + "'")
+                    skip = true
+                  } else {
+                    score += sourceScore
+                  }
+                }
+
+                pairInfo.targetTerms.foreach { case (TermPosition(term, _, _, _), nonForms) =>
+                  seenNonForms += nonForms.toList.sorted.mkString("-")
+                  val targetScore = 1.0 / targetFrequencies.getOrElse(term, -1.0)
+                  if (targetScore < 0.0) {
+                    logger.warn("No target term frequency information available for term: `" + term + "'")
+                    skip = true
+                  } else {
+                    score += targetScore
+                  }
+                }
+
+                val finalScore = math.log(score / distance.toDouble)
+                if (skip || finalScore < 0.0 || finalScore.isNaN) {
+                  None
+                } else {
+                  val result = CompareResult(pair, seenNonForms, finalScore, distance)
+                  Some(result)
+                }
+              } else {
+                None
+              }
+            }
+          }
+        }.filter(_.isDefined).map(_.get)
+      }
+
+      // Sort by score
+      mappedResults.toList.sortWith { (a, b) => a.score > b.score }
+    }
   }
 
-  private def buildTermFrequencies(queryInfo: QueryInfo): AggregateTermInfo = {
-    val countByWord: MutableMap[String, Int] = new MutableHashMap
-    val byFeature: MutableMap[String, MutableSet[String]] = new MutableHashMap
-    val wordsToStems: MutableMap[String, MutableSet[String]] = new MutableHashMap
+  private def buildTermFrequencies(queryInfo: QueryInfo)(implicit context: RequestContext): AggregateTermInfo = {
+    time("buildTermFrequencies", enabled=false) {
+      val countByWord: MutableMap[String, Int] = new MutableHashMap
+      val byFeature: MutableMap[String, MutableSet[String]] = new MutableHashMap
+      val wordsToStems: MutableMap[String, MutableSet[String]] = new MutableHashMap
 
-    var totalWords = 0
+      var totalWords = 0
 
-    queryInfo.termInfo.foreach { case (docId, dti) =>
-      dti.formTermCounts.foreach { case (term, count) =>
-        val theCount = count + countByWord.getOrElse(term, 0)
-        countByWord += term -> theCount
-        totalWords += count
-      }
-
-      dti.nonFormTermCounts.foreach { case (term, count) =>
-        val form = dti.nf2f(term).term
-        val set1: MutableSet[String] = byFeature.get(term) match {
-          case Some(s) => s
-          case None => {
-            val tmp = new MutableHashSet[String]
-            byFeature += term -> tmp
-            tmp
-          }
+      queryInfo.termInfo.foreach { case (docId, dti) =>
+        dti.formTermCounts.foreach { case (term, count) =>
+          val theCount = count + countByWord.getOrElse(term, 0)
+          countByWord += term -> theCount
+          totalWords += count
         }
 
-        set1 += form
-
-        val set2: MutableSet[String] = wordsToStems.get(form) match {
-          case Some(s) => s
-          case None => {
-            val tmp = new MutableHashSet[String]
-            wordsToStems += form -> tmp
-            tmp
+        dti.nonFormTermCounts.foreach { case (term, count) =>
+          val form = dti.nf2f(term).term
+          val set1: MutableSet[String] = byFeature.get(term) match {
+            case Some(s) => s
+            case None => {
+              val tmp = new MutableHashSet[String]
+              byFeature += term -> tmp
+              tmp
+            }
           }
+
+          set1 += form
+
+          val set2: MutableSet[String] = wordsToStems.get(form) match {
+            case Some(s) => s
+            case None => {
+              val tmp = new MutableHashSet[String]
+              wordsToStems += form -> tmp
+              tmp
+            }
+          }
+
+          set2 += term
         }
-
-        set2 += term
       }
-    }
 
-    val countByFeature: MutableMap[String, Int] = new MutableHashMap
+      val countByFeature: MutableMap[String, Int] = new MutableHashMap
 
-    countByWord.keySet.foreach { word1 =>
-      val alreadySeen: MutableSet[String] = new MutableHashSet
-      wordsToStems.get(word1).map { w1 =>
-        w1.foreach { case key =>
-          byFeature.get(key).map { bf =>
-            bf.foreach { word2 =>
-              if (!alreadySeen.contains(word2)) {
-                val priorCount = countByFeature.getOrElse(word1, 0)
-                countByFeature += word1 -> (priorCount + countByWord.getOrElse(word2, 0))
-                alreadySeen += word2
+      countByWord.keySet.foreach { word1 =>
+        val alreadySeen: MutableSet[String] = new MutableHashSet
+        wordsToStems.get(word1).map { w1 =>
+          w1.foreach { case key =>
+            byFeature.get(key).map { bf =>
+              bf.foreach { word2 =>
+                if (!alreadySeen.contains(word2)) {
+                  val priorCount = countByFeature.getOrElse(word1, 0)
+                  countByFeature += word1 -> (priorCount + countByWord.getOrElse(word2, 0))
+                  alreadySeen += word2
+                }
               }
             }
           }
         }
       }
-    }
 
-    AggregateTermInfo(countByFeature, totalWords)
+      AggregateTermInfo(countByFeature, totalWords)
+    }
   }
 
-  private def findDocumentPairs(sourceMash: Mash, targetMash: Mash,
-                                stoplist: MutableSet[String]): MutableMap[DocumentPair, DocumentPairInfo] = {
+  private def findDocumentPairs(sourceMash: Mash, targetMash: Mash, stoplist: MutableSet[String])(implicit context: RequestContext): MutableMap[DocumentPair, DocumentPairInfo] = {
 
     val match_target: TargetToSourceToF2NF = new MutableHashMap
     val match_source: TargetToSourceToF2NF = new MutableHashMap
 
-    sourceMash.nonFormsToDocs.foreach { case (term, sourceDocs) =>
-      if (!targetMash.nonFormsToDocs.contains(term)) {
-        // continue
-      } else if (stoplist.contains(term)) {
-        // continue
-      } else {
-        val targetDocs = targetMash.nonFormsToDocs(term)
-        sourceDocs.foreach { sourceDocId =>
-          val sourceInfo = sourceMash.docInfo(sourceDocId)
-          val sourceForm = sourceInfo.nf2f.get(term) match {
-            case Some(form) => form
-            case None => {
-              logger.warn("Unable to map source term `" + term + "' to a form")
-              TermPosition(term, sourceDocId, -1, (-1, -1))
+    time("first loop (findDocumentPairs)", enabled=false) {
+      sourceMash.nonFormsToDocs.foreach { case (term, sourceDocs) =>
+        if (!targetMash.nonFormsToDocs.contains(term)) {
+          // continue
+        } else if (stoplist.contains(term)) {
+          // continue
+        } else {
+          val targetDocs = targetMash.nonFormsToDocs(term)
+          sourceDocs.foreach { sourceDocId =>
+            val sourceInfo = sourceMash.docInfo(sourceDocId)
+            val sourceForm = sourceInfo.nf2f(term)
+
+            targetDocs.foreach { targetDocId =>
+              val targetInfo = targetMash.docInfo(targetDocId)
+              val targetForm = targetInfo.nf2f(term)
+
+              val mtSet = match_target.getOrElseUpdate(targetDocId, new MutableHashMap).
+                getOrElseUpdate(sourceDocId, new MutableHashMap).
+                getOrElseUpdate(targetForm, new MutableHashSet)
+
+              val msSet = match_source.getOrElseUpdate(targetDocId, new MutableHashMap).
+                getOrElseUpdate(sourceDocId, new MutableHashMap).
+                getOrElseUpdate(sourceForm, new MutableHashSet)
+
+              mtSet += term
+              msSet += term
             }
-          }
-
-          targetDocs.foreach { targetDocId =>
-            val targetInfo = targetMash.docInfo(targetDocId)
-
-            val targetForm = targetInfo.nf2f.get(term) match {
-              case Some(form) => form
-              case None => {
-                logger.warn("Unable to map target term `" + term + "' to a form")
-                TermPosition(term, targetDocId, -1, (-1, -1))
-              }
-            }
-
-            val mtSet = match_target.getOrElseUpdate(targetDocId, new MutableHashMap).
-              getOrElseUpdate(sourceDocId, new MutableHashMap).
-              getOrElseUpdate(targetForm, new MutableHashSet)
-
-            val msSet = match_source.getOrElseUpdate(targetDocId, new MutableHashMap).
-              getOrElseUpdate(sourceDocId, new MutableHashMap).
-              getOrElseUpdate(sourceForm, new MutableHashSet)
-
-            mtSet += term
-            msSet += term
           }
         }
       }
@@ -577,43 +583,45 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
 
     val pairInfo: MutableMap[DocumentPair, DocumentPairInfo] = new MutableHashMap
 
-    match_target.foreach { case (targetDocId, sourceToF2NF) =>
-      sourceToF2NF.foreach { case (sourceDocId, f2nf) =>
-        if (sourceDocId == targetDocId) {
-          // continue
-        } else {
-          val l1: SourceToF2NF = match_source.getOrElse(targetDocId, new MutableHashMap)
-          if (f2nf.size < 2) {
-            sourceToF2NF.remove(sourceDocId)
-            l1.remove(sourceDocId)
+    time("second loop (findDocumentPairs)", enabled=false) {
+      match_target.foreach { case (targetDocId, sourceToF2NF) =>
+        sourceToF2NF.foreach { case (sourceDocId, f2nf) =>
+          if (sourceDocId == targetDocId) {
             // continue
           } else {
-            val l2: FormToNonForms = l1.getOrElse(sourceDocId, new MutableHashMap)
-            if (l2.size < 2) {
+            val l1: SourceToF2NF = match_source.getOrElse(targetDocId, new MutableHashMap)
+            if (f2nf.size < 2) {
               sourceToF2NF.remove(sourceDocId)
               l1.remove(sourceDocId)
               // continue
             } else {
-              val seenForms: MutableSet[String] = new MutableHashSet
-              f2nf.keySet.foreach { form =>
-                seenForms += form.term
-              }
-
-              if (seenForms.size < 2) {
+              val l2: FormToNonForms = l1.getOrElse(sourceDocId, new MutableHashMap)
+              if (l2.size < 2) {
+                sourceToF2NF.remove(sourceDocId)
+                l1.remove(sourceDocId)
                 // continue
               } else {
-                seenForms.clear()
-                l2.keySet.foreach { form =>
+                val seenForms: MutableSet[String] = new MutableHashSet
+                f2nf.keySet.foreach { form =>
                   seenForms += form.term
                 }
 
                 if (seenForms.size < 2) {
                   // continue
                 } else {
-                  val pair = DocumentPair(sourceDocId, targetDocId)
-                  val dpi = pairInfo.getOrElseUpdate(pair, DocumentPairInfo(new MutableHashMap, new MutableHashMap))
-                  dpi.targetTerms ++= f2nf
-                  dpi.sourceTerms ++= l2
+                  seenForms.clear()
+                  l2.keySet.foreach { form =>
+                    seenForms += form.term
+                  }
+
+                  if (seenForms.size < 2) {
+                    // continue
+                  } else {
+                    val pair = DocumentPair(sourceDocId, targetDocId)
+                    val dpi = pairInfo.getOrElseUpdate(pair, DocumentPairInfo(new MutableHashMap, new MutableHashMap))
+                    dpi.targetTerms ++= f2nf
+                    dpi.sourceTerms ++= l2
+                  }
                 }
               }
             }
@@ -625,104 +633,108 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     pairInfo
   }
 
-  private def buildMash(qi: QueryInfo): Mash = {
-    val formMap: TermDocumentMap = new MutableHashMap
-    val nonFormMap: TermDocumentMap = new MutableHashMap
+  private def buildMash(qi: QueryInfo)(implicit context: RequestContext): Mash = {
+    time("buildMash", enabled=false) {
+      val formMap: TermDocumentMap = new MutableHashMap
+      val nonFormMap: TermDocumentMap = new MutableHashMap
 
-    qi.termInfo.foreach { case (docId, termInfo) =>
-      termInfo.formTermCounts.keySet.foreach { term =>
-        val docSet = formMap.getOrElseUpdate(term, new MutableHashSet[Int])
-        docSet += docId
+      qi.termInfo.foreach { case (docId, termInfo) =>
+        termInfo.formTermCounts.keySet.foreach { term =>
+          val docSet = formMap.getOrElseUpdate(term, new MutableHashSet[Int])
+          docSet += docId
+        }
+        termInfo.nonFormTermCounts.keySet.foreach { term =>
+          val docSet = nonFormMap.getOrElseUpdate(term, new MutableHashSet[Int])
+          docSet += docId
+        }
       }
-      termInfo.nonFormTermCounts.keySet.foreach { term =>
-        val docSet = nonFormMap.getOrElseUpdate(term, new MutableHashSet[Int])
-        docSet += docId
-      }
+
+      Mash(formMap, nonFormMap, qi.termInfo)
     }
-
-    Mash(formMap, nonFormMap, qi.termInfo)
   }
 
-  private def gatherInfo(req: SolrQueryRequest, rsp: SolrQueryResponse, qParams: QueryParameters): QueryInfo = {
-    val params = req.getParams
-    val defType = params.get(QueryParsing.DEFTYPE, QParserPlugin.DEFAULT_QTYPE)
+  private def gatherInfo(req: SolrQueryRequest, rsp: SolrQueryResponse, qParams: QueryParameters)(implicit context: RequestContext): QueryInfo = {
+    time("gatherInfo", enabled=false) {
+      val params = req.getParams
+      val defType = params.get(QueryParsing.DEFTYPE, QParserPlugin.DEFAULT_QTYPE)
 
-    val queryStr = params.get(qParams.qParamName)
-    if (queryStr == null) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "missing parameter: " + qParams.qParamName)
-    }
-
-    val parser = QParser.getParser(queryStr, defType, req)
-    val query = parser.getQuery
-    //val sorter = parser.getSort(true)
-    val searcher = req.getSearcher
-    val reader = searcher.getIndexReader
-
-    val searchField = params.get(qParams.searchFieldParamName)
-    if (searchField == null) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "missing parameter: " + qParams.searchFieldParamName)
-    }
-
-    val fieldList = params.get(qParams.fieldListParamName)
-    if (fieldList == null) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "missing parameter: " + qParams.fieldListParamName)
-    }
-
-    val schema = req.getSchema
-    val sf = schema.getFieldOrNull(searchField)
-    if (sf == null) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "invalid search field: " + searchField)
-    }
-    if (!sf.storeTermVector()) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "field " + searchField + " doesn't store term vectors")
-    }
-    if (!sf.storeTermPositions()) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "field " + searchField + " doesn't store term positions")
-    }
-    if (!sf.storeTermOffsets()) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "field " + searchField + " doesn't store term offsets")
-    }
-
-    val returnFields = SPLIT_REGEX.split(fieldList).toList
-    if (returnFields.isEmpty) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "field list can't be empty: " + qParams.fieldListParamName)
-    }
-
-    returnFields.foreach { fieldName =>
-      val field = schema.getFieldOrNull(fieldName)
-      if (field == null) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "invalid field in field list: " + fieldName)
+      val queryStr = params.get(qParams.qParamName)
+      if (queryStr == null) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "missing parameter: " + qParams.qParamName)
       }
-    }
 
-    val secondParam: java.util.List[org.apache.lucene.search.Query] = null
-    val listAndSet = searcher.getDocListAndSet(query, secondParam, null, 0, 100000)
-    val dlit = listAndSet.docSet.iterator()
+      val parser = QParser.getParser(queryStr, defType, req)
+      val query = parser.getQuery
+      //val sorter = parser.getSort(true)
+      val searcher = req.getSearcher
+      val reader = searcher.getIndexReader
 
-    var termInfo: QueryTermInfo = new MutableHashMap
+      logger.info("My reader is: " + String.valueOf(reader.getClass))
 
-    var jobs: List[(Int, Terms)] = Nil
-    while (dlit.hasNext) {
-      val docId = dlit.nextDoc()
-      val vec = reader.getTermVector(docId, searchField)
-      if (vec != null) {
-        jobs = (docId, vec) :: jobs
+      val searchField = params.get(qParams.searchFieldParamName)
+      if (searchField == null) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "missing parameter: " + qParams.searchFieldParamName)
       }
+
+      val fieldList = params.get(qParams.fieldListParamName)
+      if (fieldList == null) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "missing parameter: " + qParams.fieldListParamName)
+      }
+
+      val schema = req.getSchema
+      val sf = schema.getFieldOrNull(searchField)
+      if (sf == null) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "invalid search field: " + searchField)
+      }
+      if (!sf.storeTermVector()) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "field " + searchField + " doesn't store term vectors")
+      }
+      if (!sf.storeTermPositions()) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "field " + searchField + " doesn't store term positions")
+      }
+      if (!sf.storeTermOffsets()) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "field " + searchField + " doesn't store term offsets")
+      }
+
+      val returnFields = SPLIT_REGEX.split(fieldList).toList
+      if (returnFields.isEmpty) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "field list can't be empty: " + qParams.fieldListParamName)
+      }
+
+      returnFields.foreach { fieldName =>
+        val field = schema.getFieldOrNull(fieldName)
+        if (field == null) {
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "invalid field in field list: " + fieldName)
+        }
+      }
+
+      val secondParam: java.util.List[org.apache.lucene.search.Query] = null
+      val listAndSet = time("execute search", enabled=false) { searcher.getDocListAndSet(query, secondParam, null, 0, 100000) }
+      val dlit = listAndSet.docSet.iterator()
+      val documents: MutableSet[Int] = new MutableHashSet
+
+      while (dlit.hasNext) {
+        val docId = dlit.nextDoc()
+        documents += docId
+      }
+
+      val parvec = ParVector(documents.toList.sorted :_*)
+      parvec.tasksupport = new ForkJoinTaskSupport(workerPool)
+
+      var termInfo: QueryTermInfo = new MutableHashMap
+      val mappedResults = timeQuietly("get term vectors", enabled=false) { parvec.map { case docId =>
+
+        val vec = reader.getTermVector(docId, searchField)
+        (docId, mapOneVector(reader, docId, vec.iterator(null), searchField))
+      }}
+
+      mappedResults.toList.foreach { case (docId: Int, dti: DocumentTermInfo) =>
+        termInfo += docId -> dti
+      }
+
+      logger.info("Using query `" + queryStr + "' found " + plural(termInfo.size, "result", "results"))
+      QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList)
     }
-
-    val parvector = ParVector(jobs.toSeq :_*)
-    parvector.tasksupport = new ForkJoinTaskSupport(workerPool)
-
-    val mappedResults = parvector.map { case (docId: Int, vec: Terms) =>
-      (docId, mapOneVector(reader, docId, vec.iterator(null), searchField))
-    }
-
-    mappedResults.toList.foreach { case (docId: Int, dti: DocumentTermInfo) =>
-      termInfo += docId -> dti
-    }
-
-    logger.info("Using query `" + queryStr + "' found " + plural(termInfo.size, "result", "results"))
-    QueryInfo(termInfo, returnFields, (offset, count) => listAndSet.docList)
   }
 
   private def plural(i: Int, singular: String, plural: String): String = {
@@ -732,7 +744,8 @@ final class TesseraeCompareHandler extends RequestHandlerBase {
     }
   }
 
-  private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String): DocumentTermInfo = {
+  private def mapOneVector(reader: IndexReader, docId: Int, termsEnum: TermsEnum, field: String)(implicit context: RequestContext): DocumentTermInfo = {
+
     var rawText: BytesRef = termsEnum.next()
     var dpEnum: DocsAndPositionsEnum = null
 

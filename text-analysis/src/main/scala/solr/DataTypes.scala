@@ -32,9 +32,6 @@ object DataTypes {
   // Maps doc id -> DocumentTermInfo
   type QueryTermInfo = MutableMap[Int, DocumentTermInfo]
 
-  // A list of sorted frequencies
-  type SortedFrequencies = List[TermFrequencyEntry]
-
   type TermList = java.util.LinkedList[String]
   type DocFields = java.util.HashMap[String, AnyRef]
   type TesseraeDoc = java.util.HashMap[String, AnyRef]
@@ -58,9 +55,9 @@ final case class QueryInfo(termInfo: QueryTermInfo, fieldList: List[String], sea
 final case class DocumentPair(sourceDoc: Int, targetDoc: Int)
 final case class AggregateTermInfo(termCounts: MutableMap[String, Int], totalTermCount: Int) // used for calculating frequency
 final case class FrequencyInfo(sourceTerms: AggregateTermInfo, targetTerms: AggregateTermInfo)
-final case class SortedFrequencyInfo(sourceFrequencies: SortedFrequencies, targetFrequencies: SortedFrequencies)
+final case class DigestedFrequencyInfo(sourceFrequencies: FrequencyMap, targetFrequencies: FrequencyMap)
 final case class DistanceParameters(pair: DocumentPair, source: QueryInfo,
-                                    target: QueryInfo, frequencies: SortedFrequencyInfo,
+                                    target: QueryInfo, frequencies: DigestedFrequencyInfo,
                                     sourceTerms: Set[String], targetTerms: Set[String])
 final case class CompareResult(pair: DocumentPair, commonTerms: MutableSet[String], score: Double, distance: Int)
 final case class TermFrequencyEntry(term: String, frequency: Double)
@@ -73,3 +70,4 @@ final case class CacheValue(results: List[CompareResult], sourceFieldList: List[
                             targetFieldList: List[String], stoplist: MutableSet[String])
 
 final case class DocumentPairInfo(sourceTerms: FormToNonForms, targetTerms: FormToNonForms)
+final case class RequestContext(id: String)
