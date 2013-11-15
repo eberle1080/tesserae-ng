@@ -224,7 +224,7 @@ object Main {
 
     val key = normalizeLevel match {
       case NoNormalization => obj.token
-      case PartialNormalization => obj.token.toLowerCase
+      case PartialNormalization => replaceVJ(obj.token.toLowerCase)
       case FullNormalization => normalize(obj.token)
     }
 

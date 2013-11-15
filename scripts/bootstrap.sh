@@ -141,6 +141,35 @@ sudo chown tesserae:tesserae /opt/data/lexicon/lexicon-ingest.jar || die "chown 
 sudo chmod 0644 /opt/data/lexicon/lexicon-ingest.jar || due "chmod failed: /opt/data/lexicon/lexicon-ingest.jar"
 
 cd /vagrant
+[ -d lexicon-lookup ] || die "Missing directory: lexicon-lookup"
+cd lexicon-lookup || die "Can't cd to lexicon-lookup"
+
+echo "Compiling Lexicon Lookup utility..."
+rm -rf target || die "rm failed"
+rm -rf lib_managed || die "rm failed"
+sbt -batch -no-colors one-jar
+
+[ -d "target/scala-2.10" ] || die "Missing directory: target/scala-2.10"
+cd target/scala-2.10 || die "Can't cd to target/scala-2.10"
+
+echo "Installing Lexicon Lookup utility..."
+[ -f lexicon-lookup_2.10-1.0-one-jar.jar ] || die "Missing file: lexicon-lookup_2.10-1.0-one-jar.jar"
+sudo cp -f lexicon-lookup_2.10-1.0-one-jar.jar /opt/data/lexicon/lexicon-lookup.jar || die "cp failed: lexicon-lookup_2.10-1.0-one-jar.jar"
+sudo chown tesserae:tesserae /opt/data/lexicon/lexicon-lookup.jar || die "chown failed: /opt/data/lexicon/lexicon-lookup.jar"
+sudo chmod 0644 /opt/data/lexicon/lexicon-lookup.jar || due "chmod failed: /opt/data/lexicon/lexicon-lookup.jar"
+
+cd /vagrant
+[ -f conf/log4j-lexicon-lookup.properties ] || die "Missing file: log4j-lexicon-lookup.properties"
+sudo cp conf/log4j-lexicon-lookup.properties /opt/data/lexicon/log4j.properties || die "cp failed: log4j-lexicon-lookup.properties"
+sudo chown tesserae:tesserae /opt/data/lexicon/log4j.properties || die "chown failed: log4j.properties"
+sudo chmod 644 /opt/data/lexicon/log4j.properties || die "chmod failed: log4j.properties"
+
+[ -f scripts/lexicon-lookup.sh ] || die "Missing file: lexicon-lookup.sh"
+sudo cp scripts/lexicon-lookup.sh /opt/data/lexicon/lexicon-lookup.sh || die "cp failed: lexicon-lookup.sh"
+sudo chown tesserae:tesserae /opt/data/lexicon/lexicon-lookup.sh || die "chown failed: lexicon-lookup.sh"
+sudo chmod 755 /opt/data/lexicon/lexicon-lookup.sh || die "chmod failed: lexicon-lookup.sh"
+
+cd /vagrant
 [ -d text-analysis ] || die "Missing directory: text-analysis"
 cd text-analysis || die "Can't cd to text-analysis"
 
