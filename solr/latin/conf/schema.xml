@@ -73,7 +73,7 @@
        <tokenizer class="solr.StandardTokenizerFactory"/>
        <filter class="solr.LowerCaseFilterFactory"/>
        <filter class="org.apache.lucene.analysis.la.ReplaceCharacterFilterFactory" searchCharacters="vj" replacementCharacters="ui" />
-       <filter class="org.apache.lucene.analysis.la.ReplaceRegexFilterFactory" regex="[^a-z]" replacement="" />
+       <filter class="org.apache.lucene.analysis.la.ReplaceRegexFilterFactory" regex="[0-9]" replacement="" />
        <filter class="org.apache.solr.analysis.lexicon.LatinLexiconStemFilterFactory" database="/opt/data/lexicon/la.lexicon.db" multiStem="true" />
        <filter class="org.apache.solr.analysis.corpus.LatinCorpusFrequencyCollectorFactory" database="/opt/data/latin.corpus.db" />
      </analyzer>
