@@ -203,7 +203,7 @@ object Main {
       replaceAllLiterally("v", "u").
       replaceAllLiterally("j", "i")
 
-  private val nonCharacters = "[^a-z]".r
+  private val nonCharacters = "[0-9]".r
 
   private def normalize(str: String) = {
     val replaced = replaceVJ(str.toLowerCase)
@@ -266,7 +266,6 @@ object Main {
     val value_bytes = CSVLine.toByteArray(sorted)
 
     db.put(key_bytes, value_bytes)
-
     true
   }
 
