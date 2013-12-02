@@ -8,26 +8,45 @@ import org.slf4j.LoggerFactory
 import lex.db.CSVLine
 import collection.mutable.{Set => MutableSet, HashSet => MutableHashSet}
 
+/**
+ * How to normalize the keys
+ */
 sealed trait NormalizeLevel {
   def name: String
 }
 
+/**
+ * No normalization should be performed
+ */
 object NoNormalization extends NormalizeLevel {
   def name: String = "none"
 }
 
+/**
+ * Do some normalization
+ */
 object PartialNormalization extends NormalizeLevel {
   def name: String = "partial"
 }
 
+/**
+ * Do full normalization
+ */
 object FullNormalization extends NormalizeLevel {
   def name: String = "full"
 }
 
 object Main {
 
+  /**
+   * A logger
+   */
   private lazy val logger = LoggerFactory.getLogger("Main")
 
+  /**
+   * Print out the usage and exit
+   * @param code The exit code (0 means success)
+   */
   private def usage(code: Int) {
     val out = if (code == 0) { System.out } else { System.err }
     out.println("Usage: java -jar lexicon-ingest.jar [OPTIONS]...")
@@ -41,6 +60,12 @@ object Main {
     System.exit(code)
   }
 
+  /**
+   * Parse the command line options
+   *
+   * @param args The command line arguments
+   * @return A tuple of (input file, output db directory, normalization level)
+   */
   private def parseArgs(args: Array[String]) = {
     import gnu.getopt.{Getopt, LongOpt}
 
@@ -89,6 +114,10 @@ object Main {
     (input, output, normalizeKeys)
   }
 
+  /**
+   * Make sure a file is readable
+   * @param file A file
+   */
   private def sanityCheckPath(file: File) {
     if (!file.exists) {
       logger.error("Path doesn't exist: `" + file.getPath + "'"); System.exit(1)
@@ -101,6 +130,15 @@ object Main {
     }
   }
 
+  /**
+   * Use a FileInputStream and then automatically close it
+   *
+   * @param file A file to read
+   * @param autoClose if true the stream is automatically closed
+   * @param body A callback
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingFileInputStream[A](file: File, autoClose: Boolean = true)(body: FileInputStream => A): A = {
     val is = new FileInputStream(file)
     try {
@@ -112,6 +150,15 @@ object Main {
     }
   }
 
+  /**
+   * Use a BufferedInputStream and then automatically close it
+   *
+   * @param is An input stream to buffer
+   * @param autoClose if true the stream is automatically closed
+   * @param body A callback
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingBufferedInputStream[A](is: InputStream, autoClose: Boolean = true)(body: BufferedInputStream => A): A = {
     val bis = new BufferedInputStream(is)
     try {
@@ -123,6 +170,15 @@ object Main {
     }
   }
 
+  /**
+   * Use an InputStreamReader and then automatically close it
+   *
+   * @param is An input stream to wrap in a reader
+   * @param autoClose if true the reader is automatically closed
+   * @param body A callback
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingInputStreamReader[A](is: InputStream, autoClose: Boolean = true)(body: InputStreamReader => A): A = {
     val reader = new InputStreamReader(is)
     try {
@@ -134,6 +190,15 @@ object Main {
     }
   }
 
+  /**
+   * Use a LineNumberReader and then automatically close it
+   *
+   * @param reader A reader to wrap in a LineNumberReader
+   * @param autoClose if true the reader is automatically closed
+   * @param body A callback
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingLineNumberReader[A](reader: Reader, autoClose: Boolean = true)(body: LineNumberReader => A): A = {
     val lnr = new LineNumberReader(reader)
     try {
@@ -145,6 +210,15 @@ object Main {
     }
   }
 
+  /**
+   * Use a CSVReader and then automatically close it
+   *
+   * @param reader A reader to wrap in a CSVReader
+   * @param autoClose if true the reader is automatically closed
+   * @param body A callback
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingCSVReader[A](reader: Reader, autoClose: Boolean = true)(body: CSVReader => A): A = {
     val csv = new CSVReader(reader)
     try {
@@ -156,6 +230,14 @@ object Main {
     }
   }
 
+  /**
+   * Open a file as a CSV file and use it
+   *
+   * @param file A file
+   * @param callback Something that uses the CSV-parsed file
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingCSVReader[A](file: File)(callback: CSVReader => A): A = {
     sanityCheckPath(file)
     usingFileInputStream(file) { fis =>
@@ -179,6 +261,14 @@ object Main {
     }
   }
 
+  /**
+   * Use a LevelDB database and then close it when finished
+   *
+   * @param file A LevelDB database directory
+   * @param callback Something that uses the LevelDB database
+   * @tparam A An arbitrary return type
+   * @return Whatever the body returns
+   */
   private def usingDatabase[A](file: File)(callback: DB => A): A = {
     val opts = new Options
     opts.createIfMissing(true)
@@ -191,6 +281,14 @@ object Main {
     }
   }
 
+  /**
+   * Get the plural version of a string
+   *
+   * @param i An integer
+   * @param singular The singular version of a word
+   * @param plural The plural version of a word
+   * @return A plural string for the given count
+   */
   private def plural(i: Int, singular: String, plural: String): String = {
     i match {
       case 1 => "1 " + singular
@@ -198,23 +296,53 @@ object Main {
     }
   }
 
+  /**
+   * Replace v with u, and j with i
+   *
+   * @param lowerCase A lower-case string
+   * @return A string with v -> u, j -> i
+   */
   private def replaceVJ(lowerCase: String) =
     lowerCase.
       replaceAllLiterally("v", "u").
       replaceAllLiterally("j", "i")
 
+  /**
+   * A regex that matches non-alphabetic characters
+   */
   private val nonCharacters = "[0-9]".r
 
+  /**
+   * Normalize a key fully
+   *
+   * @param str A string
+   * @return A normalized string
+   */
   private def normalize(str: String) = {
     val replaced = replaceVJ(str.toLowerCase)
     nonCharacters.replaceAllIn(replaced, "")
   }
 
+  /**
+   * Determine if a stem is a special protected stem
+   *
+   * @param stem A stem
+   * @return true if the stem is protected
+   */
   private def isProtectedStem(stem: String) = stem match {
     case "sum" => true
     case _ => false
   }
 
+  /**
+   * Insert a single CSV line into the database
+   *
+   * @param line A parsed line from the CSV file
+   * @param db The LevelDB database
+   * @param keys A collection of all seen keys
+   * @param normalizeLevel The user-defined normalization level
+   * @return true if the line was actually inserted
+   */
   private def processLine(line: Array[String], db: DB, keys: MutableSet[String], normalizeLevel: NormalizeLevel): Boolean = {
     if (line.length != 3) {
       throw new RuntimeException("Expected 3 columns")
@@ -269,6 +397,11 @@ object Main {
     true
   }
 
+  /**
+   * Entry point. Read a CSV file line by line, and add it to a LevelDB database.
+   *
+   * @param args The command line arguments
+   */
   def main(args: Array[String]) = {
     val (input, output, normalizeKeys) = parseArgs(args)
     usingCSVReader(input) { csv =>

@@ -7,11 +7,22 @@ import java.io.File
 import org.fusesource.leveldbjni.JniDBFactory._
 import scala.Some
 
+/**
+ * Manage any LevelDB database connections. Once established, a connection remains open
+ * for the lifetime of the JVM. All loading is lazy.
+ */
 object LevelDBManager {
   private lazy val logger = LoggerFactory.getLogger(getClass)
   private val lock = new ReentrantReadWriteLock(true)
   private var databases: Map[String, (DB, ReentrantReadWriteLock)] = Map.empty
 
+  /**
+   * Load a LevelDB database
+   *
+   * @param dbLocation The location of the database
+   * @param createIfMissing if true and the database doesn't exist, it will be created
+   * @return A LevelDB DB instance
+   */
   private def loadDB(dbLocation: File, createIfMissing: Boolean) = {
     val opts = new Options
     opts.createIfMissing(createIfMissing)
@@ -24,6 +35,13 @@ object LevelDBManager {
     _db
   }
 
+  /**
+   * Get a database connection for a given location
+   *
+   * @param dbLocation The location of the database
+   * @param createIfMissing if true and the database doesn't exist, it will be created
+   * @return A LevelDB DB instance
+   */
   def dbFor(dbLocation: File, createIfMissing: Boolean = false) = {
     val key = dbLocation.getAbsoluteFile.getCanonicalPath
     lock.readLock().lock()

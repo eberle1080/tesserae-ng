@@ -3,6 +3,9 @@ package org.tesserae
 import net.sf.ehcache.CacheManager
 import org.slf4j.LoggerFactory
 
+/**
+ * Manage any ehcache cache instances. Everything here is lazy.
+ */
 object EhcacheManager {
   private lazy val logger = LoggerFactory.getLogger(getClass)
   private lazy val ehcacheManager = CacheManager.getInstance

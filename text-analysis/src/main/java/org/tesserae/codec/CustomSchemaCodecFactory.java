@@ -6,6 +6,9 @@ import org.apache.solr.core.CodecFactory;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.util.plugin.SolrCoreAware;
 
+/**
+ * A custom schema codec factory that returns a non-compressing term-vector codec
+ */
 public class CustomSchemaCodecFactory extends CodecFactory implements SolrCoreAware {
   private Codec codec;
   private volatile SolrCore core;

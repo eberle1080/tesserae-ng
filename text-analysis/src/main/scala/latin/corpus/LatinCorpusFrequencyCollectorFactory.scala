@@ -5,6 +5,11 @@ import org.apache.lucene.analysis.util.TokenFilterFactory
 import org.apache.lucene.analysis.TokenStream
 import java.io.File
 
+/**
+ * A factory that creates LatinCorpusFrequencyCollector instances
+ *
+ * @param args Arguments passed in through schema.xml
+ */
 class LatinCorpusFrequencyCollectorFactory(args: JavaMap[String, String]) extends TokenFilterFactory(args) {
   if (!args.containsKey("database")) {
     throw new IllegalArgumentException("can't instantiate LatinCorpusFrequencyCollectorFactory without a 'database' argument")

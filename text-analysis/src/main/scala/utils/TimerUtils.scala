@@ -11,6 +11,11 @@ object TimerUtils {
   private lazy val lock = new AnyRef
   private lazy val requestStats: MutableMap[RequestContext, MutableMap[String, (Long, Int)]] = new MutableHashMap
 
+  /**
+   * Print out timing averages for a request
+   *
+   * @param context A request context
+   */
   def printRequestStats(implicit context: RequestContext) {
     val map = lock.synchronized {
       val tmp = requestStats.toMap
@@ -34,6 +39,16 @@ object TimerUtils {
     }
   }
 
+  /**
+   * time an operation and log the timing info
+   *
+   * @param str An event description
+   * @param enabled is this timer enabled? If not, the body will simply be called and nothing will be timed
+   * @param body A callback
+   * @param context A request context
+   * @tparam A An arbitrary return type
+   * @return Whatever body returns
+   */
   def time[A](str: String, enabled: Boolean = true)(body: => A)(implicit context: RequestContext): A = {
     if (enabled) {
       val start = System.currentTimeMillis()
@@ -56,6 +71,16 @@ object TimerUtils {
     }
   }
 
+  /**
+   * Time an operation without logging it (useful for operations that occur in a tight loop)
+   *
+   * @param str An event description
+   * @param enabled is this timer enabled? If not, the body will simply be called and nothing will be timed
+   * @param body A callback
+   * @param context A request context
+   * @tparam A An arbitrary return type
+   * @return Whatever body returns
+   */
   def timeQuietly[A](str: String, enabled: Boolean = true)(body: => A)(implicit context: RequestContext): A = {
     if (enabled) {
       val start = System.currentTimeMillis()

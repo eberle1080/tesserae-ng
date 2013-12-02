@@ -3,10 +3,23 @@ package lex.db
 import java.io._
 import scala.Serializable
 
+/**
+ * Represents a single line from the CSV file
+ *
+ * @param token The original token
+ * @param partOfSpeech Part of speech (not used)
+ * @param stem The stem
+ */
 case class CSVLine(token: String, partOfSpeech: String, stem: String) extends Serializable
 
 object CSVLine {
 
+  /**
+   * Convert multiple CSVLine entries into a byte array
+   *
+   * @param lines One or more CSVLine entries
+   * @return
+   */
   def toByteArray(lines: List[CSVLine]): Array[Byte] = {
     val bos = new ByteArrayOutputStream
     val out = new ObjectOutputStream(bos)
@@ -18,6 +31,12 @@ object CSVLine {
     bytes
   }
 
+  /**
+   * Convert a byte array into a list of CSVLine entries
+   *
+   * @param bytes A non-null byte array
+   * @return A list of CSVLine entires
+   */
   def fromByteArray(bytes: Array[Byte]): List[CSVLine] = {
     val bis = new ByteArrayInputStream(bytes)
     val ois = new ObjectInputStream(bis)

@@ -7,18 +7,30 @@ import org.slf4j.LoggerFactory
 import lex.db.CSVLine
 import collection.mutable.{Set => MutableSet, HashSet => MutableHashSet}
 
+/**
+ * How to normalize the keys
+ */
 sealed trait NormalizeLevel {
   def name: String
 }
 
+/**
+ * No normalization should be performed
+ */
 object NoNormalization extends NormalizeLevel {
   def name: String = "none"
 }
 
+/**
+ * Do some normalization
+ */
 object PartialNormalization extends NormalizeLevel {
   def name: String = "partial"
 }
 
+/**
+ * Do full normalization
+ */
 object FullNormalization extends NormalizeLevel {
   def name: String = "full"
 }
@@ -27,6 +39,10 @@ object Main {
 
   private lazy val logger = LoggerFactory.getLogger("Main")
 
+  /**
+   * Print out the usage and exit
+   * @param code The exit code (0 means success)
+   */
   private def usage(code: Int) {
     val out = if (code == 0) { System.out } else { System.err }
     out.println("Usage: java -jar lexicon-ingest.jar [OPTIONS]...")
@@ -40,6 +56,12 @@ object Main {
     System.exit(code)
   }
 
+  /**
+   * Parse the command line options
+   *
+   * @param args The command line arguments
+   * @return A tuple of (database directory, lookup token, normalization level)
+   */
   private def parseArgs(args: Array[String]) = {
     import gnu.getopt.{Getopt, LongOpt}
 
@@ -88,6 +110,14 @@ object Main {
     (db, token, normalizeKeys)
   }
 
+  /**
+   * Use a leveldb database
+   *
+   * @param file The location of the database directory
+   * @param callback A callback that will use the database
+   * @tparam A Some arbitrary return type
+   * @return Whatever the callback returns
+   */
   private def usingDatabase[A](file: File)(callback: DB => A): A = {
     val opts = new Options
     opts.createIfMissing(true)
@@ -100,25 +130,54 @@ object Main {
     }
   }
 
-  private def plural(i: Int, singular: String, plural: String): String = {
+  /**
+   * Get the plural version of a string
+   *
+   * @param i An integer
+   * @param singular The singular version of a word
+   * @param plural The plural version of a word
+   * @return A plural string for the given count
+   */
+  private def plural(i: Int, singular: String, plural: String): String =
     i match {
       case 1 => "1 " + singular
       case n => n + " " + plural
     }
-  }
 
+  /**
+   * Replace v with u, and j with i
+   *
+   * @param lowerCase A lower-case string
+   * @return A string with v -> u, j -> i
+   */
   private def replaceVJ(lowerCase: String) =
     lowerCase.
       replaceAllLiterally("v", "u").
       replaceAllLiterally("j", "i")
 
+  /**
+   * A regex that matches non-alphabetic characters
+   */
   private val nonCharacters = "[0-9]".r
 
+  /**
+   * Normalize a key fully
+   *
+   * @param str A string
+   * @return A normalized string
+   */
   private def normalize(str: String) = {
     val replaced = replaceVJ(str.toLowerCase)
     nonCharacters.replaceAllIn(replaced, "")
   }
 
+  /**
+   * Get a key given a normalization level
+   *
+   * @param token Any token
+   * @param normalizeLevel The user-specified normalization level
+   * @return A (possibly-normalized) key
+   */
   private def getKey(token: String, normalizeLevel: NormalizeLevel) =
     normalizeLevel match {
       case NoNormalization => token
@@ -126,6 +185,11 @@ object Main {
       case FullNormalization => normalize(token)
     }
 
+  /**
+   * The entry point. Get a key, look it up, print any entries found
+   *
+   * @param args The command line arguments
+   */
   def main(args: Array[String]) = {
     val (database, token, normalizeKeys) = parseArgs(args)
     usingDatabase(database) { db =>
