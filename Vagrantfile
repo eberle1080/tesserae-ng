@@ -11,7 +11,7 @@ Vagrant.configure("2") do |config|
 
   # The url from where the 'config.vm.box' box will be fetched if it
   # doesn't already exist on the user's system.
-  config.vm.box_url = "http://share-static.chriseberle.net/wheezy32-tesserae-ng-v5.box"
+  config.vm.box_url = "https://eberles-public-share.s3.amazonaws.com/tesserae-ng/wheezy32-tesserae-ng-v5.box"
 
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
